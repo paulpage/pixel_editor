@@ -361,7 +361,7 @@ impl Graphics {
             x, y + height, color[0], color[0], color[2], color[3], 
         ];
         unsafe {
-            gl.Enable(gl::DEPTH_TEST);
+            gl.Disable(gl::DEPTH_TEST);
 
             gl.GenVertexArrays(1, &mut vao_2d);
             gl.GenBuffers(1, &mut vbo_2d);
@@ -509,12 +509,11 @@ impl Graphics {
     pub fn draw_text(&self, text: &str, x: i32, y: i32, scale: f32, color: [f32; 4]) {
         let gl = &self.gl;
 
-        let x = x as f32 * 2.0 / self.window_width as f32 - 1.0;
-        let y = y as f32 * 2.0 / self.window_height as f32 - 1.0;
-
         // Draw the font data into a buffer
         let font_scale = Scale::uniform(scale);
         let v_metrics = self.font.v_metrics(font_scale);
+        let x = x as f32 * 2.0 / self.window_width as f32 - 1.0;
+        let y = 1.0 - y as f32 * 2.0 / self.window_height as f32;
         let glyphs: Vec<_> = self.font
             .layout(text, font_scale, point(x, y + v_metrics.ascent))
             .collect();
@@ -533,12 +532,12 @@ impl Graphics {
         for glyph in glyphs {
             if let Some(bounding_box) = glyph.pixel_bounding_box() {
 
-                let min_x = bounding_box.min.x as usize;
-                let min_y = bounding_box.min.y as usize;
+                let min_x = bounding_box.min.x;
+                let min_y = bounding_box.min.y;
 
                 glyph.draw(|x, y, v| {
-                    let x = x as usize + min_x - 1;
-                    let y = y as usize + min_y - 1;
+                    let x = std::cmp::max(x as i32 + min_x, 1) as usize - 1;
+                    let y = std::cmp::max(y as i32 + min_y, 1) as usize - 1;
                     let index = y * glyphs_width + x;
                     buffer[index] = v;
                 });
@@ -548,6 +547,7 @@ impl Graphics {
         // Load the texture from the buffer
         let (program, uniform, id) = unsafe {
             gl.BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
+            gl.Disable(gl::DEPTH_TEST);
 
             let mut id: u32 = 0;
             gl.GenTextures(1, &mut id);
@@ -578,6 +578,7 @@ impl Graphics {
 
         let height = glyphs_height as f32 * 2.0 / self.window_height as f32;
         let width = glyphs_width as f32 / self.window_width as f32;
+        let y = y - height;
         let vertices = [
             x, y, 0.0, 1.0, color[0], color[1], color[2], color[3],
             x + width, y, 1.0, 1.0, color[0], color[1], color[2], color[3],
