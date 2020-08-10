@@ -1,9 +1,16 @@
+use glutin::window::WindowBuilder;
+use glutin::dpi::PhysicalSize;
+use glutin::window::Window;
+use glutin::ContextBuilder;
+use glutin::event_loop::EventLoop;
 use std::ffi::CString;
 use std::{ptr, mem};
 use cgmath::{Matrix4, Vector2, Deg, Vector3, Point3, SquareMatrix, Vector4};
 use glutin::{self, PossiblyCurrent};
 use self::gl::types::*;
 use rusttype::{point, Scale};
+
+use super::util::{Rect, Color};
 
 const VS_SRC_2D: &[u8] = b"
 #version 330 core
@@ -219,6 +226,7 @@ pub mod gl {
 }
 
 pub struct Graphics {
+    pub windowed_context: glutin::ContextWrapper<PossiblyCurrent, Window>,
     pub window_width: i32,
     pub window_height: i32,
     program: u32,
@@ -289,10 +297,23 @@ fn create_program(
 }
 
 pub fn init(
-    gl_context: &glutin::Context<PossiblyCurrent>,
-    window_width: i32,
-    window_height: i32,
+    event_loop: &EventLoop<()>
+    // gl_context: &glutin::Context<PossiblyCurrent>
+    // window_width: i32,
+    // window_height: i32,
 ) -> Graphics {
+
+    let windowed_context = {
+        let window_builder = WindowBuilder::new().with_title("Bricks");
+        let windowed_context =
+            ContextBuilder::new().with_vsync(true).build_windowed(window_builder, event_loop).unwrap();
+        unsafe { windowed_context.make_current().unwrap() }
+    };
+    let gl_context = windowed_context.context();
+    let (window_width, window_height) = {
+        let size = windowed_context.window().inner_size(); 
+        (size.width as i32, size.height as i32)
+    };
 
     let gl = gl::Gl::load_with(|ptr| gl_context.get_proc_address(ptr) as *const _);
     let font = rusttype::Font::try_from_bytes(include_bytes!("/usr/share/fonts/TTF/DejaVuSans.ttf") as &[u8]).unwrap();
@@ -324,6 +345,7 @@ pub fn init(
         }
     };
     Graphics {
+        windowed_context,
         window_height,
         window_width,
         program,
@@ -336,20 +358,32 @@ pub fn init(
 
 impl Graphics {
 
-    pub fn clear(&self, color: [f32; 4]) {
+    pub fn clear(&self, color: Color) {
         unsafe {
+            let color = [
+                color.r as f32 / 255.0,
+                color.g as f32 / 255.0,
+                color.b as f32 / 255.0,
+                color.a as f32 / 255.0,
+            ];
             self.gl.ClearColor(color[0], color[1], color[2], color[3]);
             self.gl.Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
         }
     }
 
-    pub fn draw_rect(&self, x: i32, y: i32, width: i32, height: i32, color: [f32; 4]) {
+    pub fn draw_rect(&self, rect: Rect, color: Color) {
         let gl = &self.gl;
 
-        let x = x as f32 * 2.0 / self.window_width as f32 - 1.0;
-        let y = 1.0 - y as f32 * 2.0 / self.window_height as f32;
-        let width = width as f32 * 2.0 / self.window_width as f32;
-        let height = -1.0 * height as f32 * 2.0 / self.window_height as f32;
+        let x = rect.x as f32 * 2.0 / self.window_width as f32 - 1.0;
+        let y = 1.0 - rect.y as f32 * 2.0 / self.window_height as f32;
+        let width = rect.width as f32 * 2.0 / self.window_width as f32;
+        let height = -1.0 * rect.height as f32 * 2.0 / self.window_height as f32;
+        let color = [
+            color.r as f32 / 255.0,
+            color.g as f32 / 255.0,
+            color.b as f32 / 255.0,
+            color.a as f32 / 255.0,
+        ];
 
         let (mut vao_2d, mut vbo_2d) = (0, 0);
         let vertices = [
@@ -396,7 +430,9 @@ impl Graphics {
         }
     }
 
-    pub fn set_screen_size(&mut self, x: i32, y: i32) {
+    pub fn resize(&mut self, physical_size: PhysicalSize<u32>) {
+        self.windowed_context.resize(physical_size);
+        let (x, y) = (physical_size.width as i32, physical_size.height as i32);
         unsafe {
             self.gl.Viewport(0, 0, x, y);
         }
@@ -506,7 +542,7 @@ impl Graphics {
         }
     }
 
-    pub fn draw_text(&self, text: &str, x: i32, y: i32, scale: f32, color: [f32; 4]) {
+    pub fn draw_text(&self, text: &str, x: i32, y: i32, scale: f32, color: Color) {
         let gl = &self.gl;
 
         // Draw the font data into a buffer
@@ -579,6 +615,12 @@ impl Graphics {
         let height = glyphs_height as f32 * 2.0 / self.window_height as f32;
         let width = glyphs_width as f32 / self.window_width as f32;
         let y = y - height;
+        let color = [
+            color.r as f32 / 255.0,
+            color.g as f32 / 255.0,
+            color.b as f32 / 255.0,
+            color.a as f32 / 255.0,
+        ];
         let vertices = [
             x, y, 0.0, 1.0, color[0], color[1], color[2], color[3],
             x + width, y, 1.0, 1.0, color[0], color[1], color[2], color[3],
@@ -620,5 +662,9 @@ impl Graphics {
             gl.BindBuffer(gl::ARRAY_BUFFER, 0);
             gl.BindVertexArray(0);
         }
+    }
+
+    pub fn swap(&mut self) {
+        self.windowed_context.swap_buffers().unwrap();
     }
 }

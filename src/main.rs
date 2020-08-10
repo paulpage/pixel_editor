@@ -6,20 +6,26 @@ use glutin::ContextBuilder;
 use cgmath::{Matrix4, Deg, Vector3, Point3, SquareMatrix};
 use std::time::Instant;
 
+mod layer;
+use layer::Layer;
+
 mod graphics;
 use graphics::{BoundingBox, Camera, Graphics, Model};
 
 mod input;
 use input::InputState;
 
+mod util;
+use util::{Rect, Color};
+
 struct State {
-    aspect_ratio: f32,
+    layers: Vec<Layer>,
 }
 
 impl State {
     fn new() -> Self {
         Self {
-            aspect_ratio: 1.0,
+            layers: Vec::new(),
         }
     }
 }
@@ -27,24 +33,14 @@ impl State {
 fn main() {
 
     let event_loop = EventLoop::new();
-    let window_builder = WindowBuilder::new().with_title("Bricks");
-    let windowed_context =
-        ContextBuilder::new().with_vsync(true).build_windowed(window_builder, &event_loop).unwrap();
-    let windowed_context = unsafe { windowed_context.make_current().unwrap() };
-
-    let size = windowed_context.window().inner_size();
-    let mut gl: graphics::Graphics = graphics::init(
-        &windowed_context.context(),
-        size.width as i32,
-        size.height as i32,
-    );
+    let mut gl = graphics::init(&event_loop);
+    let mut input_state = InputState::new();
 
     let mut state = State::new();
-    let mut input_state = InputState::new();
+    state.layers.push(Layer::new(Rect::new(0, 0, 32, 32)));
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
-
         input_state.update(&event);
 
         // if input_state.key_down(Key::A) {
@@ -70,12 +66,13 @@ fn main() {
             Event::LoopDestroyed => *control_flow = ControlFlow::Exit,
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::Resized(physical_size) => {
-                    windowed_context.resize(physical_size);
-                    gl.set_screen_size(physical_size.width as i32, physical_size.height as i32);
-                    state.aspect_ratio = {
-                        let size = windowed_context.window().inner_size();
-                        size.width as f32 / size.height as f32
-                    };
+                    // windowed_context.resize(physical_size);
+                    gl.resize(physical_size);
+                    // gl.set_screen_size(physical_size.width as i32, physical_size.height as i32);
+                    // state.aspect_ratio = {
+                    //     let size = windowed_context.window().inner_size();
+                    //     size.width as f32 / size.height as f32
+                    // };
                 }
                 WindowEvent::CloseRequested => {
                     *control_flow = ControlFlow::Exit
@@ -136,12 +133,15 @@ fn main() {
             },
             Event::MainEventsCleared => {
                 // let p = state.camera.position();
-                gl.clear([0.0, 1.0, 1.0, 1.0]);
-                gl.draw_rect(input_state.mouse_x as i32, input_state.mouse_y as i32, 100, 100, [0.0, 0.0, 0.0, 1.0]);
+                gl.clear(Color::WHITE);
+
+                gl.draw_rect(state.layers[0].rect, Color::BLACK);
+                // gl.draw_rect(input_state.mouse_x as i32, input_state.mouse_y as i32, 100, 100, [0.0, 0.0, 0.0, 1.0]);
                 gl.draw_text(
                     "Hello, World!",
-                    20, 20, 256.0, [1.0, 0.0, 0.5, 1.0]);
-                windowed_context.swap_buffers().unwrap();
+                    // gl.window_width - input_state.mouse_x as i32, gl.window_height - input_state.mouse_y as i32, 256.0, [1.0, 0.0, 0.5, 1.0]);
+                    20, 20, 20.0, Color::new(255, 0, 0, 255));
+                gl.swap();
             },
             _ => (),
         }
