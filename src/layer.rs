@@ -4,7 +4,7 @@ use super::util::Rect;
 
 pub struct Layer {
     pub rect: Rect,
-    data: image::RgbaImage,
+    pub data: image::RgbaImage,
     pub z_index: i32,
 }
 
@@ -18,7 +18,7 @@ impl Layer {
     }
 
     pub fn from_path(x: i32, y: i32, path: &str) -> Self {
-        let img = image::open(path).unwrap().into_rgba();
+        let img = image::open(path).unwrap().to_rgba();
         Self {
             rect: Rect::new(x, y, img.width(), img.height()),
             data: img,

@@ -98,7 +98,7 @@ void main() {
 }
 \0";
 
-const VS_SRC_2D_TEXTURE: &[u8] = b"
+const VS_SRC_TEXT: &[u8] = b"
 #version 330 core
 
 layout (location = 0) in vec2 position;
@@ -115,7 +115,7 @@ void main() {
 }
 \0";
 
-const FS_SRC_2D_TEXTURE: &[u8] = b"
+const FS_SRC_TEXT: &[u8] = b"
 #version 330 core
 
 uniform sampler2D tex;
@@ -125,6 +125,32 @@ out vec4 f_color;
 
 void main() {
     f_color = v_color * vec4(1.0, 1.0, 1.0, texture(tex, v_tex_coords).r);
+}
+\0";
+
+const VS_SRC_2D_TEXTURE: &[u8] = b"
+#version 330 core
+
+layout (location = 0) in vec2 position;
+layout (location = 1) in vec2 tex_coords;
+
+out vec2 v_tex_coords;
+
+void main() {
+    gl_Position = vec4(position, 0.0, 1.0);
+    v_tex_coords = tex_coords;
+}
+\0";
+
+const FS_SRC_2D_TEXTURE: &[u8] = b"
+#version 330 core
+
+uniform sampler2D tex;
+in vec2 v_tex_coords;
+out vec4 f_color;
+
+void main() {
+    f_color = texture(tex, v_tex_coords);
 }
 \0";
 
@@ -542,6 +568,91 @@ impl Graphics {
         }
     }
 
+    pub fn draw_texture(&self, rect: Rect, buffer: Vec<u8>) {
+        let gl = &self.gl;
+
+        let x = rect.x as f32 * 2.0 / self.window_width as f32 - 1.0;
+        let y = 1.0 - rect.y as f32 * 2.0 / self.window_height as f32;
+        let width = rect.width as usize;
+        let height = rect.height as usize;
+
+        // Load the texture from the buffer
+        let (program, uniform, id) = unsafe {
+            gl.BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
+            gl.Disable(gl::DEPTH_TEST);
+
+            let mut id: u32 = 0;
+            gl.GenTextures(1, &mut id);
+            gl.ActiveTexture(gl::TEXTURE0);
+            gl.BindTexture(gl::TEXTURE_2D, id);
+
+            // TODO Decide what these should be.
+            gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as GLint);
+            gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as GLint);
+            gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
+            gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
+
+            gl.TexImage2D(
+                gl::TEXTURE_2D,
+                0,
+                gl::RGBA as GLint,
+                width as GLint,
+                height as GLint,
+                0,
+                gl::RGBA,
+                gl::UNSIGNED_BYTE,
+                buffer.as_ptr() as *const _
+            );
+            let program = create_program(gl, VS_SRC_2D_TEXTURE, FS_SRC_2D_TEXTURE);
+            let uniform = gl.GetUniformLocation(program, b"tex\0".as_ptr() as *const _);
+            (program, uniform, id)
+        };
+
+        let height = height as f32 * 2.0 / self.window_height as f32;
+        let width = width as f32 * 2.0 / self.window_width as f32;
+        let y = y - height;
+
+        let vertices = [
+            x, y, 0.0, 1.0,
+            x + width, y, 1.0, 1.0,
+            x + width, y + height, 1.0, 0.0,
+            x, y, 0.0, 1.0,
+            x + width, y + height, 1.0, 0.0,
+            x, y + height, 0.0, 0.0,
+        ];
+
+        let (mut vao, mut vbo) = (0, 0);
+        unsafe {
+            gl.GenVertexArrays(1, &mut vao);
+            gl.GenBuffers(1, &mut vbo);
+            gl.BindBuffer(gl::ARRAY_BUFFER, vbo);
+            gl.BufferData(
+                gl::ARRAY_BUFFER,
+                (vertices.len() * mem::size_of::<GLfloat>()) as GLsizeiptr,
+                vertices.as_ptr() as *const _,
+                gl::STATIC_DRAW
+            );
+            gl.BindVertexArray(vao);
+            let stride = 4 * mem::size_of::<GLfloat>() as GLsizei;
+
+            gl.ActiveTexture(gl::TEXTURE0);
+            gl.BindTexture(gl::TEXTURE_2D, id);
+            gl.Uniform1i(uniform, 0);
+
+            gl.EnableVertexAttribArray(0);
+            gl.VertexAttribPointer(0, 2, gl::FLOAT, gl::FALSE, stride, ptr::null());
+            gl.EnableVertexAttribArray(1);
+            gl.VertexAttribPointer(1, 2, gl::FLOAT, gl::FALSE, stride, (2 * mem::size_of::<GLfloat>()) as *const _);
+
+            gl.UseProgram(program);
+
+            gl.DrawArrays(gl::TRIANGLES, 0, vertices.len() as GLsizei);
+
+            gl.BindBuffer(gl::ARRAY_BUFFER, 0);
+            gl.BindVertexArray(0);
+        }
+    }
+
     pub fn draw_text(&self, text: &str, x: i32, y: i32, scale: f32, color: Color) {
         let gl = &self.gl;
 
@@ -607,13 +718,13 @@ impl Graphics {
                 gl::FLOAT,
                 buffer.as_ptr() as *const _
             );
-            let program = create_program(gl, VS_SRC_2D_TEXTURE, FS_SRC_2D_TEXTURE);
+            let program = create_program(gl, VS_SRC_TEXT, FS_SRC_TEXT);
             let uniform = gl.GetUniformLocation(program, b"tex\0".as_ptr() as *const _);
             (program, uniform, id)
         };
 
         let height = glyphs_height as f32 * 2.0 / self.window_height as f32;
-        let width = glyphs_width as f32 / self.window_width as f32;
+        let width = glyphs_width as f32 * 2.0 / self.window_width as f32;
         let y = y - height;
         let color = [
             color.r as f32 / 255.0,
