@@ -13,21 +13,27 @@ use input::InputState;
 mod util;
 use util::{Rect, Color};
 
+mod gui;
+use gui::Gui;
+
 struct State {
     layers: Vec<Layer>,
-    image_x: i32,
-    image_y: i32,
-    image_scale: f64,
+    canvas: Rect,
+    canvas_scale: f64,
 }
 
 impl State {
     fn new() -> Self {
         Self {
             layers: Vec::new(),
-            image_x: 100,
-            image_y: 100,
-            image_scale: 3.0,
+            canvas: Rect::new(100, 100, 800, 600),
+            canvas_scale: 3.0,
         }
+    }
+
+    fn center_image(&mut self, window_width: i32, window_height: i32) {
+        self.canvas.x = window_width / 2 - (self.layers[0].rect.width as f64 * self.canvas_scale / 2.0) as i32;
+        self.canvas.y = window_height / 2 - (self.layers[0].rect.height as f64 * self.canvas_scale / 2.0) as i32;
     }
 }
 
@@ -36,6 +42,9 @@ fn main() {
     let event_loop = EventLoop::new();
     let mut gl = graphics::init(&event_loop);
     let mut input = InputState::new();
+    let mut gui = Gui::new();
+
+    gui.button(Rect::new(200, 200, 200, 30), "Button".into(), Color::new(0, 255, 0, 255));
 
     let mut state = State::new();
     // state.layers.push(Layer::new(Rect::new(0, 0, 32, 32)));
@@ -50,10 +59,10 @@ fn main() {
         }
 
         if input.mouse_left_down {
-            let x = ((input.mouse_x - state.image_x as f64) / state.image_scale) as i32;
-            let y = ((input.mouse_y - state.image_y as f64) / state.image_scale) as i32;
-            let old_x = x - (input.mouse_delta_x / state.image_scale) as i32;
-            let old_y = y - (input.mouse_delta_y / state.image_scale) as i32;
+            let x = ((input.mouse_x - state.canvas.x as f64) / state.canvas_scale) as i32;
+            let y = ((input.mouse_y - state.canvas.y as f64) / state.canvas_scale) as i32;
+            let old_x = x - (input.mouse_delta_x / state.canvas_scale) as i32;
+            let old_y = y - (input.mouse_delta_y / state.canvas_scale) as i32;
             state.layers[0].draw_line(old_x, old_y, x, y, Color::new(255, 255, 0, 255));
         }
 
@@ -62,19 +71,21 @@ fn main() {
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::Resized(physical_size) => {
                     gl.resize(physical_size);
+                    state.center_image(gl.window_width, gl.window_height);
                 }
                 WindowEvent::CloseRequested => {
                     *control_flow = ControlFlow::Exit
                 }
                 WindowEvent::MouseWheel { delta, .. } => {
                     match delta {
-                        MouseScrollDelta::LineDelta(_x, _y) => {
-                            // state.camera.distance *= (10.0 - y as f32) / 10.0;
+                        MouseScrollDelta::LineDelta(_x, y) => {
+                            state.canvas_scale *= (10.0 + y as f64) / 10.0;
                         }
-                        MouseScrollDelta::PixelDelta(_d) => {
-                            // state.camera.distance *= (100.0 - d.y as f32) / 100.0;
+                        MouseScrollDelta::PixelDelta(d) => {
+                            state.canvas_scale *= (100.0 + d.y as f64) / 100.0;
                         }
                     }
+                    state.center_image(gl.window_width, gl.window_height);
                 }
                 _ => (),
             },
@@ -84,15 +95,17 @@ fn main() {
                 let rect = state.layers[0].rect;
                 let src_rect = rect;
                 let dest_rect = Rect::new(
-                    state.image_x,
-                    state.image_y,
-                    (rect.width as f64 * state.image_scale) as u32,
-                    (rect.height as f64 * state.image_scale) as u32,
+                    state.canvas.x,
+                    state.canvas.y,
+                    (rect.width as f64 * state.canvas_scale) as u32,
+                    (rect.height as f64 * state.canvas_scale) as u32,
                 );
                 gl.draw_texture(src_rect, dest_rect, state.layers[0].data.clone().into_raw());
                 gl.draw_text(
                     "Hello, World!",
                     20, 20, 100.0, Color::new(255, 0, 0, 255));
+                gl.draw_rect(Rect::new(300, 300, 100, 100), Color::new(255, 0, 0, 255));
+                gui.draw(&mut gl);
                 gl.swap();
             },
             _ => (),

@@ -416,11 +416,11 @@ impl Graphics {
         let (mut vao_2d, mut vbo_2d) = (0, 0);
         let vertices = [
             x, y, color[0], color[1], color[2], color[3],
-            x + width, y, color[0], color[0], color[2], color[3],
-            x + width, y + height, color[0], color[0], color[2], color[3],
+            x + width, y, color[0], color[1], color[2], color[3],
+            x + width, y + height, color[0], color[1], color[2], color[3],
             x, y, color[0], color[1], color[2], color[3],
-            x + width, y + height, color[0], color[0], color[2], color[3],
-            x, y + height, color[0], color[0], color[2], color[3], 
+            x + width, y + height, color[0], color[1], color[2], color[3],
+            x, y + height, color[0], color[1], color[2], color[3], 
         ];
         unsafe {
             gl.Disable(gl::DEPTH_TEST);
