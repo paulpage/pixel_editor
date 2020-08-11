@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use glutin::window::WindowBuilder;
 use glutin::dpi::PhysicalSize;
 use glutin::window::Window;
