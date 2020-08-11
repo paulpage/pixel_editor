@@ -568,13 +568,13 @@ impl Graphics {
         }
     }
 
-    pub fn draw_texture(&self, rect: Rect, buffer: Vec<u8>) {
+    pub fn draw_texture(&self, src_rect: Rect, dest_rect: Rect, buffer: Vec<u8>) {
         let gl = &self.gl;
 
-        let x = rect.x as f32 * 2.0 / self.window_width as f32 - 1.0;
-        let y = 1.0 - rect.y as f32 * 2.0 / self.window_height as f32;
-        let width = rect.width as usize;
-        let height = rect.height as usize;
+        let x = dest_rect.x as f32 * 2.0 / self.window_width as f32 - 1.0;
+        let y = 1.0 - dest_rect.y as f32 * 2.0 / self.window_height as f32;
+        let src_width = src_rect.width as usize;
+        let src_height = src_rect.height as usize;
 
         // Load the texture from the buffer
         let (program, uniform, id) = unsafe {
@@ -587,8 +587,8 @@ impl Graphics {
             gl.BindTexture(gl::TEXTURE_2D, id);
 
             // TODO Decide what these should be.
-            gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as GLint);
-            gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as GLint);
+            gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as GLint);
+            gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as GLint);
             gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
             gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
 
@@ -596,8 +596,8 @@ impl Graphics {
                 gl::TEXTURE_2D,
                 0,
                 gl::RGBA as GLint,
-                width as GLint,
-                height as GLint,
+                src_width as GLint,
+                src_height as GLint,
                 0,
                 gl::RGBA,
                 gl::UNSIGNED_BYTE,
@@ -608,17 +608,17 @@ impl Graphics {
             (program, uniform, id)
         };
 
-        let height = height as f32 * 2.0 / self.window_height as f32;
-        let width = width as f32 * 2.0 / self.window_width as f32;
-        let y = y - height;
+        let dest_width = dest_rect.width as f32 * 2.0 / self.window_width as f32;
+        let dest_height = dest_rect.height as f32 * 2.0 / self.window_height as f32;
+        let y = y - dest_height;
 
         let vertices = [
             x, y, 0.0, 1.0,
-            x + width, y, 1.0, 1.0,
-            x + width, y + height, 1.0, 0.0,
+            x + dest_width, y, 1.0, 1.0,
+            x + dest_width, y + dest_height, 1.0, 0.0,
             x, y, 0.0, 1.0,
-            x + width, y + height, 1.0, 0.0,
-            x, y + height, 0.0, 0.0,
+            x + dest_width, y + dest_height, 1.0, 0.0,
+            x, y + dest_height, 0.0, 0.0,
         ];
 
         let (mut vao, mut vbo) = (0, 0);

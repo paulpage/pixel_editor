@@ -16,16 +16,20 @@ mod input;
 use input::InputState;
 
 mod util;
-use util::{Rect, Color};
+use util::{Rect, Color, Point};
 
 struct State {
     layers: Vec<Layer>,
+    image_position: Point,
+    image_scale: f64,
 }
 
 impl State {
     fn new() -> Self {
         Self {
             layers: Vec::new(),
+            image_position: Point::new(100, 100),
+            image_scale: 3.0,
         }
     }
 }
@@ -34,7 +38,7 @@ fn main() {
 
     let event_loop = EventLoop::new();
     let mut gl = graphics::init(&event_loop);
-    let mut input_state = InputState::new();
+    let mut input = InputState::new();
 
     let mut state = State::new();
     // state.layers.push(Layer::new(Rect::new(0, 0, 32, 32)));
@@ -42,10 +46,20 @@ fn main() {
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
-        input_state.update(&event);
+        input.update(&event);
 
-        if input_state.key_down(Key::Q) {
+        if input.key_down(Key::Q) {
             *control_flow = ControlFlow::Exit;
+        }
+
+        if input.mouse_left_down {
+            let x = ((input.mouse_x - state.image_position.x as f64) / state.image_scale) as i32;
+            let y = ((input.mouse_y - state.image_position.y as f64) / state.image_scale) as i32;
+            let old_x = x - (input.mouse_delta_x / state.image_scale) as i32;
+            let old_y = y - (input.mouse_delta_y / state.image_scale) as i32;
+            if state.layers[0].rect.contains_point(x, y) && state.layers[0].rect.contains_point(old_x, old_y) {
+                state.layers[0].draw_line(old_x as u32, old_y as u32, x as u32, y as u32, Color::new(255, 255, 0, 255));
+            }
         }
 
         match event {
@@ -88,7 +102,15 @@ fn main() {
             Event::MainEventsCleared => {
                 gl.clear(Color::WHITE);
                 gl.draw_rect(Rect::new(500, 500, 100, 100), Color::BLACK);
-                gl.draw_texture(state.layers[0].rect, state.layers[0].data.clone().into_raw());
+                let rect = state.layers[0].rect;
+                let src_rect = rect;
+                let dest_rect = Rect::new(
+                    state.image_position.x,
+                    state.image_position.y,
+                    (rect.width as f64 * state.image_scale) as u32,
+                    (rect.height as f64 * state.image_scale) as u32,
+                );
+                gl.draw_texture(src_rect, dest_rect, state.layers[0].data.clone().into_raw());
                 gl.draw_text(
                     "Hello, World!",
                     20, 20, 100.0, Color::new(255, 0, 0, 255));

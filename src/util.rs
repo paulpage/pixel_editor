@@ -29,6 +29,10 @@ impl Rect {
             height,
         }
     }
+
+    pub fn contains_point(&self, x: i32, y: i32) -> bool {
+        x >= self.x && x < self.x + self.width as i32 && y >= self.y && y < self.y + self.width as i32
+    }
 }
 
 #[derive(Copy, Clone)]
