@@ -259,6 +259,8 @@ pub struct Graphics {
     pub window_height: i32,
     program: u32,
     program_2d: u32,
+    program_text: u32,
+    program_texture: u32,
     pub gl: gl::Gl,
     uniforms: Uniforms,
     font: rusttype::Font<'static>,
@@ -358,6 +360,8 @@ pub fn init(
 
     let program = create_program(&gl, VS_SRC, FS_SRC);
     let program_2d = create_program(&gl, VS_SRC_2D, FS_SRC_2D);
+    let program_text = create_program(&gl, VS_SRC_TEXT, FS_SRC_TEXT);
+    let program_texture = create_program(&gl, VS_SRC_2D_TEXTURE, FS_SRC_2D_TEXTURE);
 
     let uniforms = unsafe {
         Uniforms {
@@ -378,6 +382,8 @@ pub fn init(
         window_width,
         program,
         program_2d,
+        program_text,
+        program_texture,
         gl,
         uniforms,
         font,
@@ -584,7 +590,7 @@ impl Graphics {
         let src_height = src_rect.height as usize;
 
         // Load the texture from the buffer
-        let (program, uniform, mut id) = unsafe {
+        let (uniform, mut id) = unsafe {
             gl.BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
             gl.Disable(gl::DEPTH_TEST);
 
@@ -610,10 +616,9 @@ impl Graphics {
                 gl::UNSIGNED_BYTE,
                 buffer.as_ptr() as *const _
             );
-            let program = create_program(gl, VS_SRC_2D_TEXTURE, FS_SRC_2D_TEXTURE);
-            let uniform = gl.GetUniformLocation(program, b"tex\0".as_ptr() as *const _);
+            let uniform = gl.GetUniformLocation(self.program_texture, b"tex\0".as_ptr() as *const _);
 
-            (program, uniform, id)
+            (uniform, id)
         };
 
         let dest_width = dest_rect.width as f32 * 2.0 / self.window_width as f32;
@@ -652,7 +657,7 @@ impl Graphics {
             gl.EnableVertexAttribArray(1);
             gl.VertexAttribPointer(1, 2, gl::FLOAT, gl::FALSE, stride, (2 * mem::size_of::<GLfloat>()) as *const _);
 
-            gl.UseProgram(program);
+            gl.UseProgram(self.program_texture);
 
             gl.DrawArrays(gl::TRIANGLES, 0, vertices.len() as GLsizei);
 
@@ -664,7 +669,6 @@ impl Graphics {
             gl.DeleteBuffers(1, &mut vbo);
             gl.DeleteVertexArrays(1, &mut vao);
             gl.DeleteTextures(1, &mut id);
-            gl.DeleteProgram(program);
         }
     }
 
@@ -707,7 +711,7 @@ impl Graphics {
         }
 
         // Load the texture from the buffer
-        let (mut program, uniform, mut id) = unsafe {
+        let (uniform, mut id) = unsafe {
             gl.BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
             gl.Disable(gl::DEPTH_TEST);
 
@@ -733,9 +737,8 @@ impl Graphics {
                 gl::FLOAT,
                 buffer.as_ptr() as *const _
             );
-            let program = create_program(gl, VS_SRC_TEXT, FS_SRC_TEXT);
-            let uniform = gl.GetUniformLocation(program, b"tex\0".as_ptr() as *const _);
-            (program, uniform, id)
+            let uniform = gl.GetUniformLocation(self.program_text, b"tex\0".as_ptr() as *const _);
+            (uniform, id)
         };
 
         let height = glyphs_height as f32 * 2.0 / self.window_height as f32;
@@ -781,7 +784,7 @@ impl Graphics {
             gl.EnableVertexAttribArray(2);
             gl.VertexAttribPointer(2, 4, gl::FLOAT, gl::FALSE, stride, (4 * mem::size_of::<GLfloat>()) as *const _);
 
-            gl.UseProgram(program);
+            gl.UseProgram(self.program_text);
 
             gl.DrawArrays(gl::TRIANGLES, 0, vertices.len() as GLsizei);
 
@@ -793,7 +796,7 @@ impl Graphics {
             gl.DeleteBuffers(1, &mut vbo);
             gl.DeleteVertexArrays(1, &mut vao);
             gl.DeleteTextures(1, &mut id);
-            gl.DeleteProgram(program);
+            // gl.DeleteProgram(program);
         }
     }
 
