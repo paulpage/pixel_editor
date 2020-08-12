@@ -15,7 +15,7 @@ mod util;
 use util::{Rect, Color};
 
 mod gui;
-use gui::{Gui, GuiEvent, ButtonColor};
+use gui::{Widget, Button, ColorSelector, ToolSelector};
 
 struct State {
     layers: Vec<Layer>,
@@ -47,13 +47,9 @@ fn main() {
     let event_loop = EventLoop::new();
     let mut gl = graphics::init(&event_loop);
     let mut input = InputState::new();
-    let mut gui = Gui::new();
 
-    let save_button = gui.button(Rect::new(500, 100, 200, 30), "Save".into(), ButtonColor::GREEN);
-    gui.button(Rect::new(720, 100, 200, 30), "Button 1".into(), ButtonColor::GREEN);
-    gui.button(Rect::new(940, 100, 200, 30), "Button 2".into(), ButtonColor::GREEN);
-
-    let _color_selector = gui.color_selector(
+    let mut save_button = Button::new(Rect::new(5, 5, 100, 50), "Save".into());
+    let mut color_selector = ColorSelector::new(
         Rect::new(100, 100, 50, 1000),
         vec![
             Color::new(0, 0, 0, 255),
@@ -86,7 +82,7 @@ fn main() {
             Color::new(181, 165, 213, 255),
         ],
     );
-    let _tool_selector = gui.tool_selector(
+    let mut tool_selector = ToolSelector::new(
         Rect::new(200, 100, 200, 500),
         vec![
             "Pencil".into(),
@@ -102,25 +98,16 @@ fn main() {
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
         input.update(&event);
-        let gui_events = gui.update(&input);
-        for gui_event in gui_events {
-            match gui_event {
-                GuiEvent::ButtonPressed(id) => {
-                    if id == save_button {
-                        match state.layers[0].save(Path::new("image.png")) {
-                            Ok(_) => println!("Saved to image.png"),
-                            Err(_) => println!("Failed to save!"),
-                        }
-                    }
-                }
-                GuiEvent::ColorSelected { color, .. } => {
-                    state.selected_color = color;
-                }
-                GuiEvent::ToolSelected { tool, .. } => {
-                    state.selected_tool = tool;
-                }
+
+        if save_button.update(&input) {
+            // TODO make this async?
+            match state.layers[0].save(Path::new("image.png")) {
+                Ok(_) => println!("Saved to image.png"),
+                Err(_) => println!("Failed to save!"),
             }
         }
+        state.selected_color = color_selector.update(&input);
+        state.selected_tool = tool_selector.update(&input);
 
         if input.key_down(Key::Q) {
             *control_flow = ControlFlow::Exit;
@@ -186,7 +173,9 @@ fn main() {
                     (rect.height as f64 * state.canvas_scale) as u32,
                 );
                 gl.draw_texture(src_rect, dest_rect, state.layers[0].data.clone().into_raw());
-                gui.draw(&mut gl);
+                save_button.draw(&gl);
+                color_selector.draw(&gl);
+                tool_selector.draw(&gl);
                 gl.swap();
             },
             _ => (),
