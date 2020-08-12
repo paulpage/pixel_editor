@@ -33,7 +33,7 @@ impl Rect {
     }
 
     pub fn contains_point(&self, x: i32, y: i32) -> bool {
-        x >= self.x && x < self.x + self.width as i32 && y >= self.y && y < self.y + self.width as i32
+        x >= self.x && x < self.x + self.width as i32 && y >= self.y && y < self.y + self.height as i32
     }
 }
 
@@ -76,4 +76,11 @@ impl Color {
         b: 255,
         a: 255,
     };
+    pub const GRAY: Self = Self {
+        r: 50,
+        g: 50,
+        b: 50,
+        a: 50,
+    };
+
 }

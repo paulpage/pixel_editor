@@ -1,3 +1,4 @@
+use std::path::Path;
 use glutin::event::{Event, WindowEvent, MouseScrollDelta};
 use glutin::event::VirtualKeyCode as Key;
 use glutin::event_loop::{ControlFlow, EventLoop};
@@ -14,12 +15,14 @@ mod util;
 use util::{Rect, Color};
 
 mod gui;
-use gui::Gui;
+use gui::{Gui, GuiEvent, ButtonColor};
 
 struct State {
     layers: Vec<Layer>,
     canvas: Rect,
     canvas_scale: f64,
+    selected_color: Color,
+    selected_tool: String,
 }
 
 impl State {
@@ -27,7 +30,9 @@ impl State {
         Self {
             layers: Vec::new(),
             canvas: Rect::new(100, 100, 800, 600),
-            canvas_scale: 3.0,
+            canvas_scale: 1.0,
+            selected_color: Color::BLACK,
+            selected_tool: "Pencil".into()
         }
     }
 
@@ -44,15 +49,78 @@ fn main() {
     let mut input = InputState::new();
     let mut gui = Gui::new();
 
-    gui.button(Rect::new(200, 200, 200, 30), "Button".into(), Color::new(0, 255, 0, 255));
+    let save_button = gui.button(Rect::new(500, 100, 200, 30), "Save".into(), ButtonColor::GREEN);
+    gui.button(Rect::new(720, 100, 200, 30), "Button 1".into(), ButtonColor::GREEN);
+    gui.button(Rect::new(940, 100, 200, 30), "Button 2".into(), ButtonColor::GREEN);
+
+    let _color_selector = gui.color_selector(
+        Rect::new(100, 100, 50, 1000),
+        vec![
+            Color::new(0, 0, 0, 255),
+            Color::new(70, 70, 70, 255),
+            Color::new(120, 120, 120, 255),
+            Color::new(153, 0, 48, 255),
+            Color::new(237, 28, 36, 255),
+            Color::new(255, 126, 0, 255),
+            Color::new(255, 194, 14, 255),
+            Color::new(255, 242, 0, 255),
+            Color::new(168, 230, 29, 255),
+            Color::new(34, 177, 76, 255),
+            Color::new(0, 183, 239, 255),
+            Color::new(77, 109, 243, 255),
+            Color::new(47, 54, 153, 255),
+            Color::new(111, 49, 152, 255),
+            Color::new(255, 255, 255, 255),
+            Color::new(220, 220, 220, 255),
+            Color::new(180, 180, 180, 255),
+            Color::new(156, 90, 60, 255),
+            Color::new(255, 163, 177, 255),
+            Color::new(229, 170, 122, 255),
+            Color::new(145, 228, 156, 255),
+            Color::new(255, 249, 189, 255),
+            Color::new(211, 249, 188, 255),
+            Color::new(157, 187, 97, 255),
+            Color::new(153, 217, 234, 255),
+            Color::new(112, 154, 209, 255),
+            Color::new(84, 109, 142, 255),
+            Color::new(181, 165, 213, 255),
+        ],
+    );
+    let _tool_selector = gui.tool_selector(
+        Rect::new(200, 100, 200, 500),
+        vec![
+            "Pencil".into(),
+            "Paintbrush".into(),
+            "Color Picker".into(),
+        ],
+    );
 
     let mut state = State::new();
-    // state.layers.push(Layer::new(Rect::new(0, 0, 32, 32)));
-    state.layers.push(Layer::from_path(0, 0, "/home/paul/Pictures/420.png"));
+    state.layers.push(Layer::new(Rect::new(0, 0, 800, 600)));
+    // state.layers.push(Layer::from_path(0, 0, "/home/paul/Pictures/420.png"));
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
         input.update(&event);
+        let gui_events = gui.update(&input);
+        for gui_event in gui_events {
+            match gui_event {
+                GuiEvent::ButtonPressed(id) => {
+                    if id == save_button {
+                        match state.layers[0].save(Path::new("image.png")) {
+                            Ok(_) => println!("Saved to image.png"),
+                            Err(_) => println!("Failed to save!"),
+                        }
+                    }
+                }
+                GuiEvent::ColorSelected { color, .. } => {
+                    state.selected_color = color;
+                }
+                GuiEvent::ToolSelected { tool, .. } => {
+                    state.selected_tool = tool;
+                }
+            }
+        }
 
         if input.key_down(Key::Q) {
             *control_flow = ControlFlow::Exit;
@@ -63,7 +131,25 @@ fn main() {
             let y = ((input.mouse_y - state.canvas.y as f64) / state.canvas_scale) as i32;
             let old_x = x - (input.mouse_delta_x / state.canvas_scale) as i32;
             let old_y = y - (input.mouse_delta_y / state.canvas_scale) as i32;
-            state.layers[0].draw_line(old_x, old_y, x, y, Color::new(255, 255, 0, 255));
+
+            match state.selected_tool.as_str() {
+                "Pencil" => state.layers[0].draw_line(old_x, old_y, x, y, state.selected_color),
+                "Paintbrush" => {
+                    for dx in -10..=10 {
+                        for dy in -10..=10 {
+                            if (dx as f64 * dx as f64 + dy as f64 * dy as f64).sqrt() < 5.0 {
+                                state.layers[0].draw_line(old_x + dx, old_y + dy, x + dx, y + dy, state.selected_color);
+                            }
+                        }
+                    }
+                }
+                "Color Picker" => {
+                    if let Some(color) = state.layers[0].get_pixel(x, y) {
+                        state.selected_color = color;
+                    }
+                }
+                _ => {}
+            }
         }
 
         match event {
@@ -90,8 +176,7 @@ fn main() {
                 _ => (),
             },
             Event::MainEventsCleared => {
-                gl.clear(Color::WHITE);
-                gl.draw_rect(Rect::new(500, 500, 100, 100), Color::BLACK);
+                gl.clear(Color::GRAY);
                 let rect = state.layers[0].rect;
                 let src_rect = rect;
                 let dest_rect = Rect::new(
@@ -101,10 +186,6 @@ fn main() {
                     (rect.height as f64 * state.canvas_scale) as u32,
                 );
                 gl.draw_texture(src_rect, dest_rect, state.layers[0].data.clone().into_raw());
-                gl.draw_text(
-                    "Hello, World!",
-                    20, 20, 100.0, Color::new(255, 0, 0, 255));
-                gl.draw_rect(Rect::new(300, 300, 100, 100), Color::new(255, 0, 0, 255));
                 gui.draw(&mut gl);
                 gl.swap();
             },

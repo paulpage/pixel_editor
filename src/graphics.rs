@@ -448,6 +448,11 @@ impl Graphics {
             gl.BindBuffer(gl::ARRAY_BUFFER, 0);
             gl.BindVertexArray(0);
         }
+
+        unsafe {
+            gl.DeleteVertexArrays(1, &mut vao_2d);
+            gl.DeleteBuffers(1, &mut vbo_2d);
+        }
     }
 
     // TODO remove this function, figure out what we want to do with drawing 2d
@@ -579,7 +584,7 @@ impl Graphics {
         let src_height = src_rect.height as usize;
 
         // Load the texture from the buffer
-        let (program, uniform, id) = unsafe {
+        let (program, uniform, mut id) = unsafe {
             gl.BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
             gl.Disable(gl::DEPTH_TEST);
 
@@ -607,6 +612,7 @@ impl Graphics {
             );
             let program = create_program(gl, VS_SRC_2D_TEXTURE, FS_SRC_2D_TEXTURE);
             let uniform = gl.GetUniformLocation(program, b"tex\0".as_ptr() as *const _);
+
             (program, uniform, id)
         };
 
@@ -653,6 +659,13 @@ impl Graphics {
             gl.BindBuffer(gl::ARRAY_BUFFER, 0);
             gl.BindVertexArray(0);
         }
+
+        unsafe {
+            gl.DeleteBuffers(1, &mut vbo);
+            gl.DeleteVertexArrays(1, &mut vao);
+            gl.DeleteTextures(1, &mut id);
+            gl.DeleteProgram(program);
+        }
     }
 
     pub fn draw_text(&self, text: &str, x: i32, y: i32, scale: f32, color: Color) {
@@ -694,7 +707,7 @@ impl Graphics {
         }
 
         // Load the texture from the buffer
-        let (program, uniform, id) = unsafe {
+        let (mut program, uniform, mut id) = unsafe {
             gl.BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
             gl.Disable(gl::DEPTH_TEST);
 
@@ -774,6 +787,13 @@ impl Graphics {
 
             gl.BindBuffer(gl::ARRAY_BUFFER, 0);
             gl.BindVertexArray(0);
+        }
+
+        unsafe {
+            gl.DeleteBuffers(1, &mut vbo);
+            gl.DeleteVertexArrays(1, &mut vao);
+            gl.DeleteTextures(1, &mut id);
+            gl.DeleteProgram(program);
         }
     }
 

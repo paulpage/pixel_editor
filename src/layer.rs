@@ -2,6 +2,7 @@
 
 use image::RgbaImage;
 use super::util::{Rect, Color};
+use std::path::Path;
 
 
 pub struct Layer {
@@ -12,9 +13,10 @@ pub struct Layer {
 
 impl Layer {
     pub fn new(rect: Rect) -> Self {
+        let data = RgbaImage::from_pixel(rect.width, rect.height, [255, 255, 255, 255].into());
         Self {
             rect,
-            data: RgbaImage::new(rect.width, rect.height),
+            data,
             z_index: 0,
         }
     }
@@ -46,6 +48,21 @@ impl Layer {
             for i in 0..step {
                 self.draw_pixel((x1 as f64 + dx * i as f64) as i32, (y1 as f64 + dy * i as f64) as i32, color);
             }
+        }
+    }
+
+    pub fn get_pixel(&self, x: i32, y: i32) -> Option<Color> {
+        if self.rect.contains_point(x, y) {
+            let color = self.data.get_pixel(x as u32, y as u32);
+            return Some(Color::new(color[0], color[1], color[2], color[3]))
+        }
+        None
+    }
+
+    pub fn save(&self, path: &Path) -> Result<(), ()> {
+        match self.data.save(path) {
+            Ok(()) => Ok(()),
+            Err(_) => Err(()),
         }
     }
 }
