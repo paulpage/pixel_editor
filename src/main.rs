@@ -109,6 +109,7 @@ fn main() {
             "Pencil".into(),
             "Paintbrush".into(),
             "Color Picker".into(),
+            "Paint Bucket".into(),
         ],
     );
 
@@ -160,7 +161,7 @@ fn main() {
                 "Paintbrush" => {
                     for dx in -10..=10 {
                         for dy in -10..=10 {
-                            if (dx as f64 * dx as f64 + dy as f64 * dy as f64).sqrt() < 5.0 {
+                            if (dx as f64 * dx as f64 + dy as f64 * dy as f64).sqrt() < 10.0 {
                                 state.layers[0].draw_line(old_x + dx, old_y + dy, x + dx, y + dy, state.selected_color);
                             }
                         }
@@ -171,6 +172,9 @@ fn main() {
                         state.selected_color = color;
                         color_selector.set_selected_color(color);
                     }
+                }
+                "Paint Bucket" => {
+                    state.layers[0].fill(x, y, state.selected_color);
                 }
                 _ => {}
             }

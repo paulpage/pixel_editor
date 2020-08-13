@@ -3,6 +3,7 @@
 use image::RgbaImage;
 use super::util::{Rect, Color};
 use std::path::Path;
+use std::collections::VecDeque;
 
 
 pub struct Layer {
@@ -57,6 +58,45 @@ impl Layer {
             return Some(Color::new(color[0], color[1], color[2], color[3]))
         }
         None
+    }
+
+    pub fn fill(&mut self, x: i32, y: i32, color: Color) {
+        if let Some(target_color) = self.get_pixel(x, y) {
+            if target_color == color {
+                return;
+            }
+            self.draw_pixel(x, y, color);
+            let mut queue = VecDeque::new();
+            queue.push_back((x, y));
+            while !queue.is_empty() {
+                if let Some((x, y)) = queue.pop_front() {
+                    if let Some(old_color) = self.get_pixel(x - 1, y) {
+                        if old_color == target_color {
+                            self.draw_pixel(x - 1, y, color);
+                            queue.push_back((x - 1, y));
+                        }
+                    }
+                    if let Some(old_color) = self.get_pixel(x + 1, y) {
+                        if old_color == target_color {
+                            self.draw_pixel(x + 1, y, color);
+                            queue.push_back((x + 1, y));
+                        }
+                    }
+                    if let Some(old_color) = self.get_pixel(x, y - 1) {
+                        if old_color == target_color {
+                            self.draw_pixel(x, y - 1, color);
+                            queue.push_back((x, y - 1));
+                        }
+                    }
+                    if let Some(old_color) = self.get_pixel(x, y + 1) {
+                        if old_color == target_color {
+                            self.draw_pixel(x, y + 1, color);
+                            queue.push_back((x, y + 1));
+                        }
+                    }
+                }
+            }
+        }
     }
 
     pub fn save(&self, path: &Path) -> Result<(), ()> {
