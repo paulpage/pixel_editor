@@ -56,6 +56,8 @@ impl InputState {
         self.mouse_middle_released = false;
         self.keys_pressed.clear();
         self.keys_released.clear();
+        self.mouse_delta_x = 0.0;
+        self.mouse_delta_y = 0.0;
         if let Event::WindowEvent { event, .. } = event {
             match event {
                 WindowEvent::MouseInput { button, state, .. } => {

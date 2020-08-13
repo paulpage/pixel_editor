@@ -4,7 +4,7 @@ use super::input::InputState;
 
 pub trait Widget<T> {
     fn draw(&self, graphics: &Graphics);
-    fn update(&mut self, input: &InputState) -> T;
+    fn update(&mut self, input: &InputState, click_intercepted: &mut bool) -> T;
 }
 
 pub struct Button {
@@ -55,7 +55,8 @@ impl Widget<bool> for Button {
         graphics.draw_text(&self.text, self.rect.x + 5, self.rect.y + 5, self.text_size, text_color);
     }
 
-    fn update(&mut self, input: &InputState) -> bool {
+    fn update(&mut self, input: &InputState, mouse_intercepted: &mut bool) -> bool {
+        *mouse_intercepted = self.rect.contains_point(input.mouse_x as i32, input.mouse_y as i32) && input.mouse_left_down || *mouse_intercepted;
         if self.rect.contains_point(input.mouse_x as i32, input.mouse_y as i32) {
             if input.mouse_left_down {
                 self.state = ButtonState::Pressed;
@@ -106,6 +107,12 @@ impl ColorSelector {
             selected_color_idx: 0,
         }
     }
+
+    pub fn set_selected_color(&mut self, color: Color) {
+        if let Some(i) = self.colors.iter().position(|c| *c == color) {
+            self.selected_color_idx = i;
+        }
+    }
 }
 
 impl Widget<Color> for ColorSelector {
@@ -128,12 +135,13 @@ impl Widget<Color> for ColorSelector {
         }
     }
 
-    fn update(&mut self, input: &InputState) -> Color {
+    fn update(&mut self, input: &InputState, mouse_intercepted: &mut bool) -> Color {
+        *mouse_intercepted = self.rect.contains_point(input.mouse_x as i32, input.mouse_y as i32) && input.mouse_left_down || *mouse_intercepted;
         if self.rect.contains_point(input.mouse_x as i32, input.mouse_y as i32) && input.mouse_left_pressed {
             for (i, rect) in self.rects.iter().enumerate() {
                 if rect.contains_point(input.mouse_x as i32, input.mouse_y as i32) {
                     self.selected_color_idx = i;
-                    return self.colors[i];
+                    return self.colors[i]
                 }
             }
         }
@@ -198,12 +206,13 @@ impl Widget<String> for ToolSelector {
         }
     }
 
-    fn update(&mut self, input: &InputState) -> String {
+    fn update(&mut self, input: &InputState, mouse_intercepted: &mut bool) -> String {
+        *mouse_intercepted = self.rect.contains_point(input.mouse_x as i32, input.mouse_y as i32) && input.mouse_left_down || *mouse_intercepted;
         if self.rect.contains_point(input.mouse_x as i32, input.mouse_y as i32) && input.mouse_left_pressed {
             for (i, rect) in self.rects.iter().enumerate() {
                 if rect.contains_point(input.mouse_x as i32, input.mouse_y as i32) {
                     self.selected_tool_idx = i;
-                    return self.labels[i].clone();
+                    return self.labels[i].clone()
                 }
             }
         }
