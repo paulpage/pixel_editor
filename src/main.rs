@@ -2,6 +2,7 @@ use std::path::Path;
 use glutin::event::{Event, WindowEvent, MouseScrollDelta};
 use glutin::event::VirtualKeyCode as Key;
 use glutin::event_loop::{ControlFlow, EventLoop};
+use nfd::Response as FileDialogResponse;
 
 mod layer;
 use layer::Layer;
@@ -15,7 +16,7 @@ mod util;
 use util::{Rect, Color};
 
 mod gui;
-use gui::{Widget, Button, ColorSelector, ToolSelector};
+use gui::{Widget, Button, ColorSelector, ToolSelector, NewDialog};
 
 struct State {
     layers: Vec<Layer>,
@@ -28,6 +29,9 @@ struct State {
     selected_color: Color,
     selected_tool: String,
     currently_drawing: bool,
+    // TODO better way to handle dialog boxes please
+    showing_new_dialog: bool,
+    error_text: String,
 }
 
 impl State {
@@ -43,6 +47,8 @@ impl State {
             selected_color: Color::BLACK,
             selected_tool: "Pencil".into(),
             currently_drawing: false,
+            showing_new_dialog: false,
+            error_text: "".into(),
         }
     }
     
@@ -69,9 +75,11 @@ fn main() {
     let mut gl = graphics::init(&event_loop);
     let mut input = InputState::new();
 
-    let mut save_button = Button::new(Rect::new(5, 5, 100, 50), "Save".into());
+    let mut save_button = Button::new(Rect::new(5, 5, 100, 30), "Save".into());
+    let mut new_button = Button::new(Rect::new(110, 5, 100, 30), "New".into());
+    let mut open_button = Button::new(Rect::new(215, 5, 100, 30), "Open".into());
     let mut color_selector = ColorSelector::new(
-        Rect::new(100, 100, 50, 1000),
+        Rect::new(5, 50, 50, 1000),
         vec![
             Color::new(0, 0, 0, 255),
             Color::new(70, 70, 70, 255),
@@ -104,14 +112,16 @@ fn main() {
         ],
     );
     let mut tool_selector = ToolSelector::new(
-        Rect::new(200, 100, 200, 500),
+        Rect::new(60, 50, 120, 300),
         vec![
             "Pencil".into(),
             "Paintbrush".into(),
             "Color Picker".into(),
             "Paint Bucket".into(),
+            "Spray Can".into(),
         ],
     );
+    let mut new_dialog = NewDialog::new(500, 500, 800, 600);
 
     let mut state = State::new();
     state.layers.push(Layer::new(Rect::new(0, 0, 800, 600)));
@@ -128,6 +138,32 @@ fn main() {
                 Err(_) => println!("Failed to save!"),
             }
         }
+
+        if new_dialog.should_close {
+            new_dialog.should_close = false;
+            state.showing_new_dialog = false;
+        }
+        if new_button.update(&input, &mut click_intercepted) {
+            state.showing_new_dialog = true;
+        }
+        if open_button.update(&input, &mut click_intercepted) {
+            let result = nfd::open_file_dialog(None, None).unwrap();
+            match result {
+                FileDialogResponse::Okay(file_path) => {
+                    if let Ok(layer) = Layer::from_path(0, 0, &file_path) {
+                        state.layers[0] = layer;
+                    } else {
+                        state.error_text = "Failed to load file.".into();
+                    }
+                    // state.error_text = "TODO: open file".into();
+                }
+                FileDialogResponse::OkayMultiple(_) => {
+                    state.error_text = "Can't open multiple files.".into();
+                }
+                FileDialogResponse::Cancel => {}
+            }
+        }
+
         state.selected_color = color_selector.update(&input, &mut click_intercepted);
         state.selected_tool = tool_selector.update(&input, &mut click_intercepted);
 
@@ -176,7 +212,24 @@ fn main() {
                 "Paint Bucket" => {
                     state.layers[0].fill(x, y, state.selected_color);
                 }
+                "Spray Can" => {
+                    for _ in 0..10 {
+                        let dx = rand::random::<i32>() % 100 - 50;
+                        let dy = rand::random::<i32>() % 100 - 50;
+                        if (dx as f64 * dx as f64 + dy as f64 * dy as f64).sqrt() < 50.0 {
+                            state.layers[0].draw_pixel(x + dx, y + dy, state.selected_color);
+                        }
+                    }
+                }
                 _ => {}
+            }
+        }
+
+        if state.showing_new_dialog {
+            if let Some(layer) = new_dialog.update(&input, &mut click_intercepted) {
+                // TODO safeguards!
+                state.layers[0] = layer;
+                state.showing_new_dialog = false;
             }
         }
 
@@ -208,7 +261,7 @@ fn main() {
                 _ => (),
             },
             Event::MainEventsCleared => {
-                gl.clear(Color::GRAY);
+                gl.clear(Color::new(50, 50, 50, 255));
                 let rect = state.layers[0].rect;
                 let src_rect = rect;
                 let dest_rect = Rect::new(
@@ -219,8 +272,14 @@ fn main() {
                 );
                 gl.draw_texture(src_rect, dest_rect, state.layers[0].data.clone().into_raw());
                 save_button.draw(&gl);
+                new_button.draw(&gl);
+                open_button.draw(&gl);
                 color_selector.draw(&gl);
                 tool_selector.draw(&gl);
+                gl.draw_text(&state.error_text, 5, gl.window_height - 30, 20.0, Color::new(255, 0, 0, 255));
+                if state.showing_new_dialog {
+                    new_dialog.draw(&gl);
+                }
                 gl.swap();
             },
             _ => (),

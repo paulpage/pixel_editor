@@ -77,10 +77,10 @@ impl Color {
         a: 255,
     };
     pub const GRAY: Self = Self {
-        r: 50,
-        g: 50,
-        b: 50,
-        a: 50,
+        r: 150,
+        g: 150,
+        b: 150,
+        a: 255,
     };
 
 }

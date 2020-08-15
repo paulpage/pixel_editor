@@ -672,8 +672,12 @@ impl Graphics {
         }
     }
 
-    pub fn draw_text(&self, text: &str, x: i32, y: i32, scale: f32, color: Color) {
+    pub fn draw_text(&self, text: &str, x: i32, y: i32, scale: f32, color: Color) -> Rect {
         let gl = &self.gl;
+
+        // Save the original parameters to return in the rect
+        let input_x = x;
+        let input_y = y;
 
         // Draw the font data into a buffer
         let font_scale = Scale::uniform(scale);
@@ -798,6 +802,8 @@ impl Graphics {
             gl.DeleteTextures(1, &mut id);
             // gl.DeleteProgram(program);
         }
+
+        Rect::new(input_x, input_y, glyphs_width as u32, glyphs_height as u32)
     }
 
     pub fn swap(&mut self) {

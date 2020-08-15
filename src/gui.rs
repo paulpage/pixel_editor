@@ -1,10 +1,70 @@
 use super::util::{Color, Rect};
 use super::graphics::Graphics;
 use super::input::InputState;
+use super::layer::Layer;
+use glutin::event::VirtualKeyCode as Key;
 
 pub trait Widget<T> {
     fn draw(&self, graphics: &Graphics);
     fn update(&mut self, input: &InputState, click_intercepted: &mut bool) -> T;
+}
+
+pub struct NewDialog {
+    width_field: TextBox,
+    height_field: TextBox,
+    ok_button: Button,
+    cancel_button: Button,
+    rect: Rect,
+    pub should_close: bool,
+}
+
+impl NewDialog {
+    pub fn new(x: i32, y: i32, default_width: u32, default_height: u32) -> Self {
+        let mut dialog = Self {
+            width_field: TextBox::new(Rect::new(x + 70, y + 5, 100, 30)),
+            height_field: TextBox::new(Rect::new(x + 70, y + 35, 100, 30)),
+            ok_button: Button::new(Rect::new(x + 5, y + 70, 100, 30), "Ok".into()),
+            cancel_button: Button::new(Rect::new(x + 110, y + 70, 100, 30), "Cancel".into()),
+            rect: Rect::new(x, y, 250, 110),
+            should_close: false,
+        };
+        dialog.width_field.text = default_width.to_string();
+        dialog.height_field.text = default_height.to_string();
+        dialog
+    }
+}
+
+impl Widget<Option<Layer>> for NewDialog {
+    fn draw(&self, graphics: &Graphics) {
+        graphics.draw_rect(self.rect, Color::GRAY);
+        graphics.draw_text("Width:", self.rect.x + 5, self.rect.y + 10, 20.0, Color::BLACK);
+        graphics.draw_text("Height:", self.rect.x + 5, self.rect.y + 40, 20.0, Color::BLACK);
+        self.width_field.draw(graphics);
+        self.height_field.draw(graphics);
+        self.ok_button.draw(graphics);
+        self.cancel_button.draw(graphics);
+    }
+
+    fn update(&mut self, input: &InputState, mouse_intercepted: &mut bool) -> Option<Layer> {
+        // TODO
+        if self.width_field.update(input, mouse_intercepted) {
+            self.height_field.active = false;
+        }
+        if self.height_field.update(input, mouse_intercepted) {
+            self.width_field.active = false;
+        }
+        if self.ok_button.update(input, mouse_intercepted) {
+            if let (Ok(width), Ok(height)) = (self.width_field.text.parse(), self.height_field.text.parse()) {
+                self.should_close = true;
+                return Some(Layer::new(Rect::new(0, 0, width, height)))
+            }
+        }
+        if self.cancel_button.update(input, mouse_intercepted) {
+            self.should_close = true;
+        }
+
+        None
+    }
 }
 
 pub struct Button {
@@ -71,6 +131,54 @@ impl Widget<bool> for Button {
             self.state = ButtonState::Released;
         }
         false
+    }
+}
+
+pub struct TextBox {
+    rect: Rect,
+    text: String,
+    pub active: bool,
+}
+
+impl TextBox {
+    pub fn new(rect: Rect) -> Self {
+        Self {
+            rect,
+            text: String::new(),
+            active: false,
+        }
+    }
+
+    pub fn get_text(&self) -> String {
+        self.text.clone()
+    }
+}
+
+impl Widget<bool> for TextBox {
+    fn draw(&self, graphics: &Graphics) {
+        graphics.draw_rect(self.rect, Color::BLACK);
+        graphics.draw_rect(Rect::new(self.rect.x + 2, self.rect.y + 2, self.rect.width - 4, self.rect.height - 4), Color::WHITE);
+        let text_rect = graphics.draw_text(&self.text, self.rect.x + 4, self.rect.y + 4, 20.0, Color::BLACK);
+        if self.active {
+            graphics.draw_rect(Rect::new(text_rect.x + text_rect.width as i32, text_rect.y, 5, text_rect.height), Color::BLACK);
+        }
+    }
+
+    fn update(&mut self, input: &InputState, mouse_intercepted: &mut bool) -> bool {
+        *mouse_intercepted = self.rect.contains_point(input.mouse_x as i32, input.mouse_y as i32) && input.mouse_left_down || *mouse_intercepted;
+        self.active = (self.rect.contains_point(input.mouse_x as i32, input.mouse_y as i32) && input.mouse_left_pressed) || self.active;
+        if self.active {
+            self.text.push_str(&input.text_entered());
+            for key in &input.keys_pressed {
+                match key {
+                    Key::Back => {
+                        self.text.pop();
+                    }
+                    _ => {}
+                }
+            }
+        }
+        self.active
     }
 }
 

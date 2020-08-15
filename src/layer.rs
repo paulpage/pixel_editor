@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 use image::RgbaImage;
+use image::error::ImageError;
 use super::util::{Rect, Color};
 use std::path::Path;
 use std::collections::VecDeque;
@@ -22,13 +23,13 @@ impl Layer {
         }
     }
 
-    pub fn from_path(x: i32, y: i32, path: &str) -> Self {
-        let img = image::open(path).unwrap().to_rgba();
-        Self {
+    pub fn from_path(x: i32, y: i32, path: &str) -> Result<Self, ImageError> {
+        let img = image::open(path)?.to_rgba();
+        Ok(Self {
             rect: Rect::new(x, y, img.width(), img.height()),
             data: img,
             z_index: 0,
-        }
+        })
     }
 
     pub fn draw_pixel(&mut self, x: i32, y: i32, color: Color) {
