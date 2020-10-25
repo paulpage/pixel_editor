@@ -9,8 +9,8 @@ use std::ffi::CString;
 use std::{ptr, mem};
 use cgmath::{Matrix4, Vector2, Deg, Vector3, Point3, SquareMatrix, Vector4};
 use glutin::{self, PossiblyCurrent};
-use self::gl::types::*;
-use rusttype::{point, Scale};
+use gl::types::*;
+use rusttype::{point, Scale, PositionedGlyph};
 
 use super::util::{Rect, Color};
 
@@ -248,11 +248,6 @@ fn get_mouse_ray(aspect_ratio: f32, mouse_position: Vector2<f32>, camera: &Camer
     (camera.position(), direction)
 }
 
-pub mod gl {
-    pub use self::Gles2 as Gl;
-    include!(concat!(env!("OUT_DIR"), "/gl_bindings.rs"));
-}
-
 pub struct Graphics {
     pub windowed_context: glutin::ContextWrapper<PossiblyCurrent, Window>,
     pub window_width: i32,
@@ -261,32 +256,31 @@ pub struct Graphics {
     program_2d: u32,
     program_text: u32,
     program_texture: u32,
-    pub gl: gl::Gl,
     uniforms: Uniforms,
     font: rusttype::Font<'static>,
 }
 
-fn create_shader(gl: &gl::Gl, shader_type: u32, source: &'static [u8]) -> u32 {
+fn create_shader(shader_type: u32, source: &'static [u8]) -> u32 {
     unsafe {
-        let id = gl.CreateShader(shader_type);
-        gl.ShaderSource(
+        let id = gl::CreateShader(shader_type);
+        gl::ShaderSource(
             id,
             1,
             [source.as_ptr() as *const _].as_ptr(),
             std::ptr::null()
         );
-        gl.CompileShader(id);
+        gl::CompileShader(id);
         let mut success: gl::types::GLint = 1;
-        gl.GetShaderiv(id, gl::COMPILE_STATUS, &mut success);
+        gl::GetShaderiv(id, gl::COMPILE_STATUS, &mut success);
         if success == 0 {
             let mut len: gl::types::GLint = 0;
-            gl.GetShaderiv(id, gl::INFO_LOG_LENGTH, &mut len);
+            gl::GetShaderiv(id, gl::INFO_LOG_LENGTH, &mut len);
             let error = {
                 let mut buffer: Vec<u8> = Vec::with_capacity(len as usize + 1);
                 buffer.extend([b' '].iter().cycle().take(len as usize));
                 CString::from_vec_unchecked(buffer)
             };
-            gl.GetShaderInfoLog(id, len, std::ptr::null_mut(), error.as_ptr() as *mut gl::types::GLchar);
+            gl::GetShaderInfoLog(id, len, std::ptr::null_mut(), error.as_ptr() as *mut gl::types::GLchar);
             eprintln!("{}", error.to_string_lossy());
         }
         id
@@ -294,33 +288,32 @@ fn create_shader(gl: &gl::Gl, shader_type: u32, source: &'static [u8]) -> u32 {
 }
 
 fn create_program(
-    gl: &gl::Gl,
     vertex_shader: &'static [u8],
     fragment_shader: &'static [u8],
 ) -> u32 {
-    let vs = create_shader(gl, gl::VERTEX_SHADER, vertex_shader);
-    let fs = create_shader(gl, gl::FRAGMENT_SHADER, fragment_shader);
+    let vs = create_shader(gl::VERTEX_SHADER, vertex_shader);
+    let fs = create_shader(gl::FRAGMENT_SHADER, fragment_shader);
     
     unsafe {
-        let program = gl.CreateProgram();
-        gl.AttachShader(program, vs);
-        gl.AttachShader(program, fs);
-        gl.LinkProgram(program);
+        let program = gl::CreateProgram();
+        gl::AttachShader(program, vs);
+        gl::AttachShader(program, fs);
+        gl::LinkProgram(program);
         let mut success: gl::types::GLint = 1;
-        gl.GetProgramiv(program, gl::LINK_STATUS, &mut success);
+        gl::GetProgramiv(program, gl::LINK_STATUS, &mut success);
         if success == 0 {
             let mut len: gl::types::GLint = 0;
-            gl.GetShaderiv(program, gl::INFO_LOG_LENGTH, &mut len);
+            gl::GetShaderiv(program, gl::INFO_LOG_LENGTH, &mut len);
             let error = {
                 let mut buffer: Vec<u8> = Vec::with_capacity(len as usize + 1);
                 buffer.extend([b' '].iter().cycle().take(len as usize));
                 CString::from_vec_unchecked(buffer)
             };
-            gl.GetProgramInfoLog(program, len, std::ptr::null_mut(), error.as_ptr() as *mut gl::types::GLchar);
+            gl::GetProgramInfoLog(program, len, std::ptr::null_mut(), error.as_ptr() as *mut gl::types::GLchar);
             eprintln!("{}", error.to_string_lossy());
         }
-        gl.DeleteShader(vs);
-        gl.DeleteShader(fs);
+        gl::DeleteShader(vs);
+        gl::DeleteShader(fs);
         program
     }
 
@@ -345,35 +338,35 @@ pub fn init(
         (size.width as i32, size.height as i32)
     };
 
-    let gl = gl::Gl::load_with(|ptr| gl_context.get_proc_address(ptr) as *const _);
+    gl::load_with(|ptr| gl_context.get_proc_address(ptr) as *const _);
     let font = rusttype::Font::try_from_bytes(include_bytes!("/usr/share/fonts/TTF/DejaVuSans.ttf") as &[u8]).unwrap();
 
     unsafe {
-        gl.Enable(gl::DEPTH_TEST);
-        gl.DepthFunc(gl::LESS);
-        gl.Disable(gl::CULL_FACE);
-        gl.Enable(gl::BLEND);
-        gl.BlendFunc(gl::ONE, gl::ONE_MINUS_SRC_ALPHA);
+        gl::Enable(gl::DEPTH_TEST);
+        gl::DepthFunc(gl::LESS);
+        gl::Disable(gl::CULL_FACE);
+        gl::Enable(gl::BLEND);
+        gl::BlendFunc(gl::ONE, gl::ONE_MINUS_SRC_ALPHA);
 
-        gl.Viewport(0, 0, window_width, window_height);
+        gl::Viewport(0, 0, window_width, window_height);
     }
 
-    let program = create_program(&gl, VS_SRC, FS_SRC);
-    let program_2d = create_program(&gl, VS_SRC_2D, FS_SRC_2D);
-    let program_text = create_program(&gl, VS_SRC_TEXT, FS_SRC_TEXT);
-    let program_texture = create_program(&gl, VS_SRC_2D_TEXTURE, FS_SRC_2D_TEXTURE);
+    let program = create_program(VS_SRC, FS_SRC);
+    let program_2d = create_program(VS_SRC_2D, FS_SRC_2D);
+    let program_text = create_program(VS_SRC_TEXT, FS_SRC_TEXT);
+    let program_texture = create_program(VS_SRC_2D_TEXTURE, FS_SRC_2D_TEXTURE);
 
     let uniforms = unsafe {
         Uniforms {
-            world: gl.GetUniformLocation(program, b"world\0".as_ptr() as *const _),
-            view: gl.GetUniformLocation(program, b"view\0".as_ptr() as *const _),
-            proj: gl.GetUniformLocation(program, b"proj\0".as_ptr() as *const _),
-            view_position: gl.GetUniformLocation(program, b"view_position\0".as_ptr() as *const _),
-            light_position: gl.GetUniformLocation(program, b"light.position\0".as_ptr() as *const _),
-            light_direction: gl.GetUniformLocation(program, b"light.direction\0".as_ptr() as *const _),
-            light_ambient: gl.GetUniformLocation(program, b"light.ambient\0".as_ptr() as *const _),
-            light_diffuse: gl.GetUniformLocation(program, b"light.diffuse\0".as_ptr() as *const _),
-            light_specular: gl.GetUniformLocation(program, b"light.specular\0".as_ptr() as *const _),
+            world: gl::GetUniformLocation(program, b"world\0".as_ptr() as *const _),
+            view: gl::GetUniformLocation(program, b"view\0".as_ptr() as *const _),
+            proj: gl::GetUniformLocation(program, b"proj\0".as_ptr() as *const _),
+            view_position: gl::GetUniformLocation(program, b"view_position\0".as_ptr() as *const _),
+            light_position: gl::GetUniformLocation(program, b"light.position\0".as_ptr() as *const _),
+            light_direction: gl::GetUniformLocation(program, b"light.direction\0".as_ptr() as *const _),
+            light_ambient: gl::GetUniformLocation(program, b"light.ambient\0".as_ptr() as *const _),
+            light_diffuse: gl::GetUniformLocation(program, b"light.diffuse\0".as_ptr() as *const _),
+            light_specular: gl::GetUniformLocation(program, b"light.specular\0".as_ptr() as *const _),
         }
     };
     Graphics {
@@ -384,7 +377,6 @@ pub fn init(
         program_2d,
         program_text,
         program_texture,
-        gl,
         uniforms,
         font,
     }
@@ -400,14 +392,12 @@ impl Graphics {
                 color.b as f32 / 255.0,
                 color.a as f32 / 255.0,
             ];
-            self.gl.ClearColor(color[0], color[1], color[2], color[3]);
-            self.gl.Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
+            gl::ClearColor(color[0], color[1], color[2], color[3]);
+            gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
         }
     }
 
     pub fn draw_rect(&self, rect: Rect, color: Color) {
-        let gl = &self.gl;
-
         let x = rect.x as f32 * 2.0 / self.window_width as f32 - 1.0;
         let y = 1.0 - rect.y as f32 * 2.0 / self.window_height as f32;
         let width = rect.width as f32 * 2.0 / self.window_width as f32;
@@ -429,35 +419,35 @@ impl Graphics {
             x, y + height, color[0], color[1], color[2], color[3], 
         ];
         unsafe {
-            gl.Disable(gl::DEPTH_TEST);
+            gl::Disable(gl::DEPTH_TEST);
 
-            gl.GenVertexArrays(1, &mut vao_2d);
-            gl.GenBuffers(1, &mut vbo_2d);
-            gl.BindBuffer(gl::ARRAY_BUFFER, vbo_2d);
-            gl.BufferData(
+            gl::GenVertexArrays(1, &mut vao_2d);
+            gl::GenBuffers(1, &mut vbo_2d);
+            gl::BindBuffer(gl::ARRAY_BUFFER, vbo_2d);
+            gl::BufferData(
                 gl::ARRAY_BUFFER,
                 (vertices.len() * mem::size_of::<GLfloat>()) as GLsizeiptr,
                 vertices.as_ptr() as *const _,
                 gl::STATIC_DRAW
             );
-            gl.BindVertexArray(vao_2d);
+            gl::BindVertexArray(vao_2d);
             let stride = 6 * mem::size_of::<GLfloat>() as GLsizei;
-            gl.EnableVertexAttribArray(0);
-            gl.VertexAttribPointer(0, 2, gl::FLOAT, gl::FALSE, stride, ptr::null());
-            gl.EnableVertexAttribArray(1);
-            gl.VertexAttribPointer(1, 4, gl::FLOAT, gl::FALSE, stride, (2 * mem::size_of::<GLfloat>()) as *const _);
+            gl::EnableVertexAttribArray(0);
+            gl::VertexAttribPointer(0, 2, gl::FLOAT, gl::FALSE, stride, ptr::null());
+            gl::EnableVertexAttribArray(1);
+            gl::VertexAttribPointer(1, 4, gl::FLOAT, gl::FALSE, stride, (2 * mem::size_of::<GLfloat>()) as *const _);
 
-            self.gl.UseProgram(self.program_2d);
-            self.gl.BindVertexArray(vao_2d);
-            self.gl.DrawArrays(gl::TRIANGLES, 0, vertices.len() as GLsizei);
+            gl::UseProgram(self.program_2d);
+            gl::BindVertexArray(vao_2d);
+            gl::DrawArrays(gl::TRIANGLES, 0, vertices.len() as GLsizei);
 
-            gl.BindBuffer(gl::ARRAY_BUFFER, 0);
-            gl.BindVertexArray(0);
+            gl::BindBuffer(gl::ARRAY_BUFFER, 0);
+            gl::BindVertexArray(0);
         }
 
         unsafe {
-            gl.DeleteVertexArrays(1, &mut vao_2d);
-            gl.DeleteBuffers(1, &mut vbo_2d);
+            gl::DeleteVertexArrays(1, &mut vao_2d);
+            gl::DeleteBuffers(1, &mut vbo_2d);
         }
     }
 
@@ -465,7 +455,7 @@ impl Graphics {
     pub fn draw_2d(&self) {
         unsafe {
             // 2d
-            self.gl.BindVertexArray(0);
+            gl::BindVertexArray(0);
         }
     }
 
@@ -473,7 +463,7 @@ impl Graphics {
         self.windowed_context.resize(physical_size);
         let (x, y) = (physical_size.width as i32, physical_size.height as i32);
         unsafe {
-            self.gl.Viewport(0, 0, x, y);
+            gl::Viewport(0, 0, x, y);
         }
         self.window_width = x;
         self.window_height = y;
@@ -525,65 +515,61 @@ impl Graphics {
     pub fn load_model(&mut self, vertices: &[f32]) -> (u32, i32) {
         // TODO there is no "unload_model" right now because this is meant to be run once for each
         // model, and all the memory can be cleaned up when the program exits.
-        let gl = &self.gl;
         let (mut vao, mut vbo) = (0, 0);
         unsafe {
-            gl.GenVertexArrays(1, &mut vao);
-            gl.GenBuffers(1, &mut vbo);
-            gl.BindBuffer(gl::ARRAY_BUFFER, vbo);
-            gl.BufferData(
+            gl::GenVertexArrays(1, &mut vao);
+            gl::GenBuffers(1, &mut vbo);
+            gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
+            gl::BufferData(
                 gl::ARRAY_BUFFER,
                 (vertices.len() * mem::size_of::<GLfloat>()) as GLsizeiptr,
                 vertices.as_ptr() as *const _,
                 gl::STATIC_DRAW
             );
-            gl.BindVertexArray(vao);
+            gl::BindVertexArray(vao);
             let stride = 10 * mem::size_of::<GLfloat>() as GLsizei;
-            gl.EnableVertexAttribArray(0);
-            gl.VertexAttribPointer(0, 3, gl::FLOAT, gl::FALSE, stride, ptr::null());
-            gl.EnableVertexAttribArray(1);
-            gl.VertexAttribPointer(1, 3, gl::FLOAT, gl::FALSE, stride, (3 * mem::size_of::<GLfloat>()) as *const _);
-            gl.EnableVertexAttribArray(2);
-            gl.VertexAttribPointer(2, 4, gl::FLOAT, gl::FALSE, stride, (6 * mem::size_of::<GLfloat>()) as *const _);
-            gl.BindBuffer(gl::ARRAY_BUFFER, 0);
-            gl.BindVertexArray(0);
+            gl::EnableVertexAttribArray(0);
+            gl::VertexAttribPointer(0, 3, gl::FLOAT, gl::FALSE, stride, ptr::null());
+            gl::EnableVertexAttribArray(1);
+            gl::VertexAttribPointer(1, 3, gl::FLOAT, gl::FALSE, stride, (3 * mem::size_of::<GLfloat>()) as *const _);
+            gl::EnableVertexAttribArray(2);
+            gl::VertexAttribPointer(2, 4, gl::FLOAT, gl::FALSE, stride, (6 * mem::size_of::<GLfloat>()) as *const _);
+            gl::BindBuffer(gl::ARRAY_BUFFER, 0);
+            gl::BindVertexArray(0);
         }
         (vao, vertices.len() as i32)
     }
 
     pub fn start_3d(&self) {
         unsafe {
-            self.gl.UseProgram(self.program);
+            gl::UseProgram(self.program);
         }
     }
 
     pub fn draw_model(&self, vao: GLuint, vertex_buffer_length: i32, world: [f32; 16], view: [f32; 16], proj: [f32; 16], view_position: [f32; 3], light: [f32; 15]) {
-        let gl = &self.gl;
         unsafe {
-            gl.Enable(gl::DEPTH_TEST);
-            gl.BlendFunc(gl::ONE, gl::ONE_MINUS_SRC_ALPHA);
-            // gl.UseProgram(self.program);
+            gl::Enable(gl::DEPTH_TEST);
+            gl::BlendFunc(gl::ONE, gl::ONE_MINUS_SRC_ALPHA);
+            // gl::UseProgram(self.program);
 
-            gl.UniformMatrix4fv(self.uniforms.world, 1, gl::FALSE, world.as_ptr());
-            gl.UniformMatrix4fv(self.uniforms.view, 1, gl::FALSE, view.as_ptr());
-            gl.UniformMatrix4fv(self.uniforms.proj, 1, gl::FALSE, proj.as_ptr());
-            gl.Uniform3f(self.uniforms.view_position, view_position[0], view_position[1], view_position[2]);
-            gl.Uniform3f(self.uniforms.light_position, light[0], light[1], light[2]);
-            gl.Uniform3f(self.uniforms.light_direction, light[3], light[4], light[5]);
-            gl.Uniform3f(self.uniforms.light_ambient, light[6], light[7], light[8]);
-            gl.Uniform3f(self.uniforms.light_diffuse, light[9], light[10], light[11]);
-            gl.Uniform3f(self.uniforms.light_specular, light[12], light[13], light[14]);
+            gl::UniformMatrix4fv(self.uniforms.world, 1, gl::FALSE, world.as_ptr());
+            gl::UniformMatrix4fv(self.uniforms.view, 1, gl::FALSE, view.as_ptr());
+            gl::UniformMatrix4fv(self.uniforms.proj, 1, gl::FALSE, proj.as_ptr());
+            gl::Uniform3f(self.uniforms.view_position, view_position[0], view_position[1], view_position[2]);
+            gl::Uniform3f(self.uniforms.light_position, light[0], light[1], light[2]);
+            gl::Uniform3f(self.uniforms.light_direction, light[3], light[4], light[5]);
+            gl::Uniform3f(self.uniforms.light_ambient, light[6], light[7], light[8]);
+            gl::Uniform3f(self.uniforms.light_diffuse, light[9], light[10], light[11]);
+            gl::Uniform3f(self.uniforms.light_specular, light[12], light[13], light[14]);
 
-            gl.BindVertexArray(vao);
-            gl.DrawArrays(gl::TRIANGLES, 0, vertex_buffer_length as GLsizei);
-            // gl.BindVertexArray(0);
-            gl.Disable(gl::DEPTH_TEST);
+            gl::BindVertexArray(vao);
+            gl::DrawArrays(gl::TRIANGLES, 0, vertex_buffer_length as GLsizei);
+            // gl::BindVertexArray(0);
+            gl::Disable(gl::DEPTH_TEST);
         }
     }
 
     pub fn draw_texture(&self, src_rect: Rect, dest_rect: Rect, buffer: Vec<u8>) {
-        let gl = &self.gl;
-
         let x = dest_rect.x as f32 * 2.0 / self.window_width as f32 - 1.0;
         let y = 1.0 - dest_rect.y as f32 * 2.0 / self.window_height as f32;
         let src_width = src_rect.width as usize;
@@ -591,21 +577,21 @@ impl Graphics {
 
         // Load the texture from the buffer
         let (uniform, mut id) = unsafe {
-            gl.BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
-            gl.Disable(gl::DEPTH_TEST);
+            gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
+            gl::Disable(gl::DEPTH_TEST);
 
             let mut id: u32 = 0;
-            gl.GenTextures(1, &mut id);
-            gl.ActiveTexture(gl::TEXTURE0);
-            gl.BindTexture(gl::TEXTURE_2D, id);
+            gl::GenTextures(1, &mut id);
+            gl::ActiveTexture(gl::TEXTURE0);
+            gl::BindTexture(gl::TEXTURE_2D, id);
 
             // TODO Decide what these should be.
-            gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as GLint);
-            gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as GLint);
-            gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
-            gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::NEAREST as GLint);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as GLint);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
 
-            gl.TexImage2D(
+            gl::TexImage2D(
                 gl::TEXTURE_2D,
                 0,
                 gl::RGBA as GLint,
@@ -616,7 +602,7 @@ impl Graphics {
                 gl::UNSIGNED_BYTE,
                 buffer.as_ptr() as *const _
             );
-            let uniform = gl.GetUniformLocation(self.program_texture, b"tex\0".as_ptr() as *const _);
+            let uniform = gl::GetUniformLocation(self.program_texture, b"tex\0".as_ptr() as *const _);
 
             (uniform, id)
         };
@@ -636,67 +622,102 @@ impl Graphics {
 
         let (mut vao, mut vbo) = (0, 0);
         unsafe {
-            gl.GenVertexArrays(1, &mut vao);
-            gl.GenBuffers(1, &mut vbo);
-            gl.BindBuffer(gl::ARRAY_BUFFER, vbo);
-            gl.BufferData(
+            gl::GenVertexArrays(1, &mut vao);
+            gl::GenBuffers(1, &mut vbo);
+            gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
+            gl::BufferData(
                 gl::ARRAY_BUFFER,
                 (vertices.len() * mem::size_of::<GLfloat>()) as GLsizeiptr,
                 vertices.as_ptr() as *const _,
                 gl::STATIC_DRAW
             );
-            gl.BindVertexArray(vao);
+            gl::BindVertexArray(vao);
             let stride = 4 * mem::size_of::<GLfloat>() as GLsizei;
 
-            gl.ActiveTexture(gl::TEXTURE0);
-            gl.BindTexture(gl::TEXTURE_2D, id);
-            gl.Uniform1i(uniform, 0);
+            gl::ActiveTexture(gl::TEXTURE0);
+            gl::BindTexture(gl::TEXTURE_2D, id);
+            gl::Uniform1i(uniform, 0);
 
-            gl.EnableVertexAttribArray(0);
-            gl.VertexAttribPointer(0, 2, gl::FLOAT, gl::FALSE, stride, ptr::null());
-            gl.EnableVertexAttribArray(1);
-            gl.VertexAttribPointer(1, 2, gl::FLOAT, gl::FALSE, stride, (2 * mem::size_of::<GLfloat>()) as *const _);
+            gl::EnableVertexAttribArray(0);
+            gl::VertexAttribPointer(0, 2, gl::FLOAT, gl::FALSE, stride, ptr::null());
+            gl::EnableVertexAttribArray(1);
+            gl::VertexAttribPointer(1, 2, gl::FLOAT, gl::FALSE, stride, (2 * mem::size_of::<GLfloat>()) as *const _);
 
-            gl.UseProgram(self.program_texture);
+            gl::UseProgram(self.program_texture);
 
-            gl.DrawArrays(gl::TRIANGLES, 0, vertices.len() as GLsizei);
+            gl::DrawArrays(gl::TRIANGLES, 0, vertices.len() as GLsizei);
 
-            gl.BindBuffer(gl::ARRAY_BUFFER, 0);
-            gl.BindVertexArray(0);
+            gl::BindBuffer(gl::ARRAY_BUFFER, 0);
+            gl::BindVertexArray(0);
         }
 
         unsafe {
-            gl.DeleteBuffers(1, &mut vbo);
-            gl.DeleteVertexArrays(1, &mut vao);
-            gl.DeleteTextures(1, &mut id);
+            gl::DeleteBuffers(1, &mut vbo);
+            gl::DeleteVertexArrays(1, &mut vao);
+            gl::DeleteTextures(1, &mut id);
         }
     }
 
-    pub fn draw_text(&self, text: &str, x: i32, y: i32, scale: f32, color: Color) -> Rect {
-        let gl = &self.gl;
+    // pub fn render_text(&self, text: &str, max_width: i32, scale: f32) -> {
+    //     let font_scale = Scale::uniform(scale);
+    //     let v_metrics = self.font.v_metrics(font_scale);
+    //     let x = x as f32 * 2.0 / self.window_width as f32 - 1.0;
+    //     let y = 1.0 - y as f32 * 2.0 / self.window_height as f32;
+    //     let glyphs: Vec<_> = self.font
+    //         .layout(text, font_scale, point(x, y + v_metrics.ascent))
+    //         .collect();
 
-        // Save the original parameters to return in the rect
-        let input_x = x;
-        let input_y = y;
+    //     let glyphs_height = (v_metrics.ascent - v_metrics.descent).ceil() as usize;
+    //     let glyphs_width = glyphs
+    //         .iter()
+    //         .rev()
+    //         .map(|g| g.position().x as f32 + g.unpositioned().h_metrics().advance_width)
+    //         .next()
+    //         .unwrap_or(0.0)
+    //         .ceil() as usize;
 
-        // Draw the font data into a buffer
+    //     let mut buffer: Vec<f32> = vec![0.0; glyphs_width * glyphs_height];
+
+    //     for glyph in glyphs {
+    //         if let Some(bounding_box) = glyph.pixel_bounding_box() {
+
+    //             let min_x = bounding_box.min.x;
+    //             let min_y = bounding_box.min.y;
+
+    //             glyph.draw(|x, y, v| {
+    //                 let x = std::cmp::max(x as i32 + min_x, 1) as usize - 1;
+    //                 let y = std::cmp::max(y as i32 + min_y, 1) as usize - 1;
+    //                 let index = y * glyphs_width + x;
+    //                 buffer[index] = v;
+    //             });
+    //         }
+    //     }
+    // }
+    pub fn layout_text(&self, text: &str, scale: f32) -> (Vec<PositionedGlyph<'_>>, usize, usize) {
         let font_scale = Scale::uniform(scale);
         let v_metrics = self.font.v_metrics(font_scale);
-        let x = x as f32 * 2.0 / self.window_width as f32 - 1.0;
-        let y = 1.0 - y as f32 * 2.0 / self.window_height as f32;
         let glyphs: Vec<_> = self.font
-            .layout(text, font_scale, point(x, y + v_metrics.ascent))
+            .layout(text, font_scale, point(0.0, 0.0 + v_metrics.ascent))
             .collect();
 
-        let glyphs_height = (v_metrics.ascent - v_metrics.descent).ceil() as usize;
-        let glyphs_width = glyphs
+        let height = (v_metrics.ascent - v_metrics.descent).ceil() as usize;
+        let width = glyphs
             .iter()
             .rev()
             .map(|g| g.position().x as f32 + g.unpositioned().h_metrics().advance_width)
             .next()
             .unwrap_or(0.0)
             .ceil() as usize;
+        (glyphs, width, height)
+    }
 
+    pub fn draw_text(&self, text: &str, x: i32, y: i32, scale: f32, color: Color) -> Rect {
+        // Save the original parameters to return in the rect
+        let input_x = x;
+        let input_y = y;
+
+        let (glyphs, glyphs_width, glyphs_height) = self.layout_text(text, scale);
+        
         let mut buffer: Vec<f32> = vec![0.0; glyphs_width * glyphs_height];
 
         for glyph in glyphs {
@@ -716,21 +737,21 @@ impl Graphics {
 
         // Load the texture from the buffer
         let (uniform, mut id) = unsafe {
-            gl.BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
-            gl.Disable(gl::DEPTH_TEST);
+            gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
+            gl::Disable(gl::DEPTH_TEST);
 
             let mut id: u32 = 0;
-            gl.GenTextures(1, &mut id);
-            gl.ActiveTexture(gl::TEXTURE0);
-            gl.BindTexture(gl::TEXTURE_2D, id);
+            gl::GenTextures(1, &mut id);
+            gl::ActiveTexture(gl::TEXTURE0);
+            gl::BindTexture(gl::TEXTURE_2D, id);
 
             // TODO Decide what these should be.
-            gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as GLint);
-            gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as GLint);
-            gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
-            gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as GLint);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::LINEAR as GLint);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_S, gl::CLAMP_TO_EDGE as GLint);
+            gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_WRAP_T, gl::CLAMP_TO_EDGE as GLint);
 
-            gl.TexImage2D(
+            gl::TexImage2D(
                 gl::TEXTURE_2D,
                 0,
                 gl::RED as GLint,
@@ -741,10 +762,12 @@ impl Graphics {
                 gl::FLOAT,
                 buffer.as_ptr() as *const _
             );
-            let uniform = gl.GetUniformLocation(self.program_text, b"tex\0".as_ptr() as *const _);
+            let uniform = gl::GetUniformLocation(self.program_text, b"tex\0".as_ptr() as *const _);
             (uniform, id)
         };
 
+        let x = x as f32 * 2.0 / self.window_width as f32 - 1.0;
+        let y = 1.0 - y as f32 * 2.0 / self.window_height as f32;
         let height = glyphs_height as f32 * 2.0 / self.window_height as f32;
         let width = glyphs_width as f32 * 2.0 / self.window_width as f32;
         let y = y - height;
@@ -765,42 +788,42 @@ impl Graphics {
 
         let (mut vao, mut vbo) = (0, 0);
         unsafe {
-            gl.GenVertexArrays(1, &mut vao);
-            gl.GenBuffers(1, &mut vbo);
-            gl.BindBuffer(gl::ARRAY_BUFFER, vbo);
-            gl.BufferData(
+            gl::GenVertexArrays(1, &mut vao);
+            gl::GenBuffers(1, &mut vbo);
+            gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
+            gl::BufferData(
                 gl::ARRAY_BUFFER,
                 (vertices.len() * mem::size_of::<GLfloat>()) as GLsizeiptr,
                 vertices.as_ptr() as *const _,
                 gl::STATIC_DRAW
             );
-            gl.BindVertexArray(vao);
+            gl::BindVertexArray(vao);
             let stride = 8 * mem::size_of::<GLfloat>() as GLsizei;
 
-            gl.ActiveTexture(gl::TEXTURE0);
-            gl.BindTexture(gl::TEXTURE_2D, id);
-            gl.Uniform1i(uniform, 0);
+            gl::ActiveTexture(gl::TEXTURE0);
+            gl::BindTexture(gl::TEXTURE_2D, id);
+            gl::Uniform1i(uniform, 0);
 
-            gl.EnableVertexAttribArray(0);
-            gl.VertexAttribPointer(0, 2, gl::FLOAT, gl::FALSE, stride, ptr::null());
-            gl.EnableVertexAttribArray(1);
-            gl.VertexAttribPointer(1, 2, gl::FLOAT, gl::FALSE, stride, (2 * mem::size_of::<GLfloat>()) as *const _);
-            gl.EnableVertexAttribArray(2);
-            gl.VertexAttribPointer(2, 4, gl::FLOAT, gl::FALSE, stride, (4 * mem::size_of::<GLfloat>()) as *const _);
+            gl::EnableVertexAttribArray(0);
+            gl::VertexAttribPointer(0, 2, gl::FLOAT, gl::FALSE, stride, ptr::null());
+            gl::EnableVertexAttribArray(1);
+            gl::VertexAttribPointer(1, 2, gl::FLOAT, gl::FALSE, stride, (2 * mem::size_of::<GLfloat>()) as *const _);
+            gl::EnableVertexAttribArray(2);
+            gl::VertexAttribPointer(2, 4, gl::FLOAT, gl::FALSE, stride, (4 * mem::size_of::<GLfloat>()) as *const _);
 
-            gl.UseProgram(self.program_text);
+            gl::UseProgram(self.program_text);
 
-            gl.DrawArrays(gl::TRIANGLES, 0, vertices.len() as GLsizei);
+            gl::DrawArrays(gl::TRIANGLES, 0, vertices.len() as GLsizei);
 
-            gl.BindBuffer(gl::ARRAY_BUFFER, 0);
-            gl.BindVertexArray(0);
+            gl::BindBuffer(gl::ARRAY_BUFFER, 0);
+            gl::BindVertexArray(0);
         }
 
         unsafe {
-            gl.DeleteBuffers(1, &mut vbo);
-            gl.DeleteVertexArrays(1, &mut vao);
-            gl.DeleteTextures(1, &mut id);
-            // gl.DeleteProgram(program);
+            gl::DeleteBuffers(1, &mut vbo);
+            gl::DeleteVertexArrays(1, &mut vao);
+            gl::DeleteTextures(1, &mut id);
+            // gl::DeleteProgram(program);
         }
 
         Rect::new(input_x, input_y, glyphs_width as u32, glyphs_height as u32)

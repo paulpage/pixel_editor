@@ -5,7 +5,7 @@ use glutin::event_loop::{ControlFlow, EventLoop};
 use nfd::Response as FileDialogResponse;
 
 mod layer;
-use layer::Layer;
+use layer::{Image, ImageHistory, Layer};
 
 mod graphics;
 
@@ -16,10 +16,11 @@ mod util;
 use util::{Rect, Color};
 
 mod gui;
-use gui::{Widget, Button, ColorSelector, ToolSelector, NewDialog};
+use gui::{Widget, Button, ColorSelector, ToolSelector, NewDialog, ConfirmationDialog};
 
 struct State {
-    layers: Vec<Layer>,
+    image: Image,
+    active_layer_idx: usize,
     canvas: Rect,
     canvas_scale: f64,
     canvas_offset_x: i32,
@@ -37,7 +38,8 @@ struct State {
 impl State {
     fn new() -> Self {
         Self {
-            layers: Vec::new(),
+            image: Image::new(800, 600),
+            active_layer_idx: 0,
             canvas: Rect::new(100, 100, 800, 600),
             canvas_scale: 2.0,
             canvas_offset_x: 0,
@@ -53,8 +55,8 @@ impl State {
     }
     
     fn screen_to_canvas(&self, x: f64, y: f64) -> (i32, i32) {
-        let layer_x = ((x - self.canvas.x as f64 + (self.layers[0].rect.width as f64 * self.canvas_scale / 2.0)) / self.canvas_scale - 0.5).round() as i32;
-        let layer_y = ((y - self.canvas.y as f64 + (self.layers[0].rect.height as f64 * self.canvas_scale / 2.0)) / self.canvas_scale - 0.5).round() as i32;
+        let layer_x = ((x - self.canvas.x as f64 + (self.image.width as f64 * self.canvas_scale / 2.0)) / self.canvas_scale - 0.5).round() as i32;
+        let layer_y = ((y - self.canvas.y as f64 + (self.image.height as f64 * self.canvas_scale / 2.0)) / self.canvas_scale - 0.5).round() as i32;
         (layer_x, layer_y)
     }
 
@@ -67,6 +69,10 @@ impl State {
         self.canvas.x += self.canvas_offset_x;
         self.canvas.y += self.canvas_offset_y;
     }
+
+    fn active_layer(&mut self) -> &mut Layer {
+        &mut self.image.layers[self.active_layer_idx]
+    }
 }
 
 fn main() {
@@ -76,6 +82,7 @@ fn main() {
     let mut input = InputState::new();
 
     let mut save_button = Button::new(Rect::new(5, 5, 100, 30), "Save".into());
+
     let mut new_button = Button::new(Rect::new(110, 5, 100, 30), "New".into());
     let mut open_button = Button::new(Rect::new(215, 5, 100, 30), "Open".into());
     let mut color_selector = ColorSelector::new(
@@ -123,9 +130,20 @@ fn main() {
     );
     let mut new_dialog = NewDialog::new(500, 500, 800, 600);
 
+    let mut confirm_overwrite_dialog = ConfirmationDialog::new(
+        &gl,
+        400,
+        400,
+        format!("Are you sure you want to overwrite {}?", "image.png"),
+        vec![
+            "Yes".into(),
+            "No".into(),
+            "Cancel".into(),
+        ],
+    );
+    confirm_overwrite_dialog.showing = false;
+
     let mut state = State::new();
-    state.layers.push(Layer::new(Rect::new(0, 0, 800, 600)));
-    // state.layers.push(Layer::from_path(0, 0, "/home/paul/Pictures/420.png"));
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
@@ -133,9 +151,40 @@ fn main() {
 
         let mut click_intercepted = false;
         if save_button.update(&input, &mut click_intercepted) {
-            match state.layers[0].save(Path::new("image.png")) {
-                Ok(_) => println!("Saved to image.png"),
-                Err(_) => println!("Failed to save!"),
+            let result = nfd::open_save_dialog(None, None).unwrap();
+            match result {
+                FileDialogResponse::Okay(file_path) => {
+                    let path = Path::new(&file_path);
+                    let mut write_file = false;
+                    if path.exists() {
+                        confirm_overwrite_dialog.showing = true;
+                        println!("Got here");
+                        if let Some(text) = confirm_overwrite_dialog.update(&input, &mut click_intercepted) {
+                            println!("Found button '{}'", text);
+                            match &text[..] {
+                                "Yes" => {
+                                    confirm_overwrite_dialog.showing = false;
+                                    write_file = true;
+                                }
+                                _ => {
+                                    confirm_overwrite_dialog.showing = false;
+                                }
+                            }
+                        }
+                    } else {
+                        write_file = true;
+                    }
+                    if write_file {
+                        match state.image.save(Path::new(&file_path)) {
+                            Ok(_) => println!("Saved to {}", file_path),
+                            Err(_) => state.error_text = "Failed to save file!".into(),
+                        }
+                    }
+                }
+                FileDialogResponse::OkayMultiple(_) => {
+                    state.error_text = "Can't save to multiple files.".into();
+                }
+                FileDialogResponse::Cancel => {}
             }
         }
 
@@ -150,12 +199,11 @@ fn main() {
             let result = nfd::open_file_dialog(None, None).unwrap();
             match result {
                 FileDialogResponse::Okay(file_path) => {
-                    if let Ok(layer) = Layer::from_path(0, 0, &file_path) {
-                        state.layers[0] = layer;
+                    if let Ok(image) = Image::from_path(&file_path) {
+                        state.image = image;
                     } else {
                         state.error_text = "Failed to load file.".into();
                     }
-                    // state.error_text = "TODO: open file".into();
                 }
                 FileDialogResponse::OkayMultiple(_) => {
                     state.error_text = "Can't open multiple files.".into();
@@ -187,37 +235,38 @@ fn main() {
 
         if (input.mouse_left_pressed && !click_intercepted) || state.currently_drawing {
             state.currently_drawing = true;
+            let color = state.selected_color;
 
             let (x, y) = state.screen_to_canvas(input.mouse_x, input.mouse_y);
             let old_x = x - (input.mouse_delta_x / state.canvas_scale) as i32;
             let old_y = y - (input.mouse_delta_y / state.canvas_scale) as i32;
 
             match state.selected_tool.as_str() {
-                "Pencil" => state.layers[0].draw_line(old_x, old_y, x, y, state.selected_color),
+                "Pencil" => state.active_layer().draw_line(old_x, old_y, x, y, color),
                 "Paintbrush" => {
                     for dx in -10..=10 {
                         for dy in -10..=10 {
                             if (dx as f64 * dx as f64 + dy as f64 * dy as f64).sqrt() < 10.0 {
-                                state.layers[0].draw_line(old_x + dx, old_y + dy, x + dx, y + dy, state.selected_color);
+                                state.active_layer().draw_line(old_x + dx, old_y + dy, x + dx, y + dy, color);
                             }
                         }
                     }
                 }
                 "Color Picker" => {
-                    if let Some(color) = state.layers[0].get_pixel(x, y) {
+                    if let Some(color) = state.active_layer().get_pixel(x, y) {
                         state.selected_color = color;
                         color_selector.set_selected_color(color);
                     }
                 }
                 "Paint Bucket" => {
-                    state.layers[0].fill(x, y, state.selected_color);
+                    state.active_layer().fill(x, y, color);
                 }
                 "Spray Can" => {
                     for _ in 0..10 {
                         let dx = rand::random::<i32>() % 100 - 50;
                         let dy = rand::random::<i32>() % 100 - 50;
                         if (dx as f64 * dx as f64 + dy as f64 * dy as f64).sqrt() < 50.0 {
-                            state.layers[0].draw_pixel(x + dx, y + dy, state.selected_color);
+                            state.active_layer().draw_pixel(x + dx, y + dy, color);
                         }
                     }
                 }
@@ -228,7 +277,9 @@ fn main() {
         if state.showing_new_dialog {
             if let Some(layer) = new_dialog.update(&input, &mut click_intercepted) {
                 // TODO safeguards!
-                state.layers[0] = layer;
+                let image = Image::new(layer.rect.width, layer.rect.height);
+                state.image = image;
+                state.active_layer_idx = 0;
                 state.showing_new_dialog = false;
             }
         }
@@ -236,6 +287,8 @@ fn main() {
         if !input.mouse_left_down {
             state.currently_drawing = false;
         }
+
+        confirm_overwrite_dialog.update(&input, &mut click_intercepted);
 
         match event {
             Event::LoopDestroyed => *control_flow = ControlFlow::Exit,
@@ -262,7 +315,7 @@ fn main() {
             },
             Event::MainEventsCleared => {
                 gl.clear(Color::new(50, 50, 50, 255));
-                let rect = state.layers[0].rect;
+                let rect = Rect::new(0, 0, state.image.width, state.image.height);
                 let src_rect = rect;
                 let dest_rect = Rect::new(
                     state.canvas.x - (rect.width as f64 * state.canvas_scale / 2.0).round() as i32,
@@ -270,7 +323,8 @@ fn main() {
                     (rect.width as f64 * state.canvas_scale) as u32,
                     (rect.height as f64 * state.canvas_scale) as u32,
                 );
-                gl.draw_texture(src_rect, dest_rect, state.layers[0].data.clone().into_raw());
+                let blended = state.image.blend();
+                gl.draw_texture(src_rect, dest_rect, blended.data.clone().into_raw());
                 save_button.draw(&gl);
                 new_button.draw(&gl);
                 open_button.draw(&gl);
@@ -280,6 +334,7 @@ fn main() {
                 if state.showing_new_dialog {
                     new_dialog.draw(&gl);
                 }
+                confirm_overwrite_dialog.draw(&gl);
                 gl.swap();
             },
             _ => (),

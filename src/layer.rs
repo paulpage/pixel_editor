@@ -5,12 +5,23 @@ use image::error::ImageError;
 use super::util::{Rect, Color};
 use std::path::Path;
 use std::collections::VecDeque;
-
+use std::cmp::{min, max};
 
 pub struct Layer {
     pub rect: Rect,
     pub data: image::RgbaImage,
     pub z_index: i32,
+}
+
+pub struct Image {
+    pub width: u32,
+    pub height: u32,
+    pub layers: Vec<Layer>,
+}
+
+pub struct ImageHistory {
+    snapshots: Vec<Image>,
+    idx: i32,
 }
 
 impl Layer {
@@ -100,8 +111,103 @@ impl Layer {
         }
     }
 
+    pub fn blend(&mut self, other: &Layer) -> bool {
+        let width = min(other.rect.width as i32, self.rect.width as i32 - other.rect.x);
+        let height = min(other.rect.height as i32, self.rect.height as i32 - other.rect.y);
+        if self.rect.width >= other.rect.width && self.rect.height >= other.rect.height {
+            for y in max(0, other.rect.y)..other.rect.y + height {
+                for x in max(0, other.rect.x)..min(self.rect.width as i32, other.rect.x + width) {
+
+                    let base_color = self.get_pixel(x, y).unwrap();
+                    let other_color = other.get_pixel(x - other.rect.x, y - other.rect.y).unwrap();
+
+                    if other_color.a == 0 {
+                        continue;
+                    }
+                    if other_color.a == 255 {
+                        self.draw_pixel(x, y, other_color);
+                        continue;
+                    }
+
+                    let a1 = other_color.a as f64 / 255.0;
+                    let a2 = base_color.a as f64 / 255.0;
+                    let factor = a2 * (1.0 - a1);
+
+                    
+                    let new_color = Color {
+                        r: (base_color.r as f64 * a1 + other_color.r as f64 * factor / (a1 + factor)) as u8,
+                        g: (base_color.r as f64 * a1 + other_color.r as f64 * factor / (a1 + factor)) as u8,
+                        b: (base_color.r as f64 * a1 + other_color.r as f64 * factor / (a1 + factor)) as u8,
+                        a: (base_color.r as f64 * a1 + other_color.r as f64 * factor / (a1 + factor)) as u8,
+                    };
+                    self.draw_pixel(x, y, new_color);
+                }
+            }
+            return true;
+        }
+        false
+    }
+}
+
+impl Image {
+    pub fn new(width: u32, height: u32) -> Self {
+        let mut layers = Vec::new();
+        layers.push(Layer::new(Rect::new(0, 0, width, height)));
+        Self {
+            width,
+            height,
+            layers,
+        }
+    }
+
+    pub fn from_path(path: &str) -> Result<Self, ImageError> {
+        let mut layers = Vec::new();
+        layers.push(Layer::from_path(0, 0, path)?);
+        Ok(Self {
+            width: layers[0].rect.width,
+            height: layers[0].rect.height,
+            layers,
+        })
+    }
+
+    // TODO probably don't even need this since we have clone, but will have to implmement clone
+    // pub fn copy(other: &Self) -> Image {
+    //     other.cloned()
+    // }
+
+    // TODO do I need this?
+    pub fn add_layer(&mut self) {
+        // TODO
+    }
+
+    // TODO do I need this?
+    pub fn remove_layer(&mut self) {
+        // TODO
+    }
+
+    pub fn take_snapshot(&self, history: &mut ImageHistory) {
+        // TODO
+    }
+
+    pub fn undo(&mut self, history: &mut ImageHistory) {
+        // TODO
+    }
+
+    pub fn redo(&mut self, history: &mut ImageHistory) {
+        // TODO
+    }
+
+    pub fn blend(&self) -> Layer {
+        let mut base = Layer::new(Rect::new(0, 0, self.width, self.height));
+        for layer in &self.layers {
+            base.blend(layer);
+        }
+        base
+    }
+
     pub fn save(&self, path: &Path) -> Result<(), ()> {
-        match self.data.save(path) {
+        let blended = self.blend();
+        match blended.data.save(path) {
             Ok(()) => Ok(()),
             Err(_) => Err(()),
         }

@@ -1,12 +1,65 @@
 use super::util::{Color, Rect};
 use super::graphics::Graphics;
 use super::input::InputState;
-use super::layer::Layer;
+use super::layer::{Layer, Image};
 use glutin::event::VirtualKeyCode as Key;
 
 pub trait Widget<T> {
     fn draw(&self, graphics: &Graphics);
     fn update(&mut self, input: &InputState, click_intercepted: &mut bool) -> T;
+}
+
+pub struct ConfirmationDialog {
+    message: String,
+    buttons: Vec<Button>,
+    rect: Rect,
+    pub showing: bool,
+}
+
+impl ConfirmationDialog {
+    pub fn new(graphics: &Graphics, x: i32, y: i32, message: String, options: Vec<String>) -> Self {
+        let (_, text_width, _) = graphics.layout_text(&message, 20.0);
+        let width = std::cmp::max(
+            text_width as u32 + 10,
+            options.len() as u32 * 105 + 5
+        );
+        let rect = Rect::new(x, y, width, 200);
+        let mut buttons = Vec::new();
+        for (i, option) in options.iter().enumerate() {
+            buttons.push(Button::new(Rect::new(x + 5 + i as i32 * 105, y + 50, 100, 50), option.to_string()));
+        }
+        Self {
+            rect,
+            message,
+            buttons,
+            showing: false,
+        }
+    }
+}
+
+impl Widget<Option<String>> for ConfirmationDialog {
+    fn draw(&self, graphics: &Graphics) {
+        if self.showing {
+            graphics.draw_rect(self.rect, Color::GRAY);
+            graphics.draw_text(&self.message, self.rect.x + 5, self.rect.y + 5, 20.0, Color::BLACK);
+            for button in &self.buttons {
+                button.draw(graphics);
+            }
+        }
+    }
+
+    fn update(&mut self, input: &InputState, mouse_intercepted: &mut bool) -> Option<String> {
+        if self.showing {
+            // *mouse_intercepted = self.rect.contains_point(input.mouse_x as i32, input.mouse_y as i32) && input.mouse_left_down || *mouse_intercepted;
+            for button in &mut self.buttons {
+                if button.update(input, mouse_intercepted) {
+                    println!("yah");
+                    return Some(button.text.clone());
+                }
+            }
+        }
+        None
+    }
 }
 
 pub struct NewDialog {
