@@ -1,22 +1,18 @@
+use sdl2::keyboard::Keycode as Key;
 use std::path::Path;
-use glutin::event::{Event, WindowEvent, MouseScrollDelta};
-use glutin::event::VirtualKeyCode as Key;
-use glutin::event_loop::{ControlFlow, EventLoop};
 use nfd::Response as FileDialogResponse;
 
 mod layer;
 use layer::{Image, ImageHistory, Layer};
-
-mod graphics;
-
-mod input;
-use input::InputState;
 
 mod util;
 use util::{Rect, Color};
 
 mod gui;
 use gui::{Widget, Button, ColorSelector, ToolSelector, NewDialog, ConfirmationDialog};
+
+mod platform;
+use platform::{Platform, PlatformMessage};
 
 struct State {
     image: Image,
@@ -41,7 +37,7 @@ impl State {
             image: Image::new(800, 600),
             active_layer_idx: 0,
             canvas: Rect::new(100, 100, 800, 600),
-            canvas_scale: 2.0,
+            canvas_scale: 1.0,
             canvas_offset_x: 0,
             canvas_offset_y: 0,
             canvas_offset_baseline_x: 0,
@@ -54,15 +50,15 @@ impl State {
         }
     }
     
-    fn screen_to_canvas(&self, x: f64, y: f64) -> (i32, i32) {
-        let layer_x = ((x - self.canvas.x as f64 + (self.image.width as f64 * self.canvas_scale / 2.0)) / self.canvas_scale - 0.5).round() as i32;
-        let layer_y = ((y - self.canvas.y as f64 + (self.image.height as f64 * self.canvas_scale / 2.0)) / self.canvas_scale - 0.5).round() as i32;
+    fn screen_to_canvas(&self, x: i32, y: i32) -> (i32, i32) {
+        let layer_x = ((x as f64 - self.canvas.x as f64 + (self.image.width as f64 * self.canvas_scale / 2.0)) / self.canvas_scale - 0.5).round() as i32;
+        let layer_y = ((y as f64 - self.canvas.y as f64 + (self.image.height as f64 * self.canvas_scale / 2.0)) / self.canvas_scale - 0.5).round() as i32;
         (layer_x, layer_y)
     }
 
-    fn center_canvas(&mut self, window_width: i32, window_height: i32) {
-        self.canvas.x = window_width / 2;
-        self.canvas.y = window_height / 2;
+    fn center_canvas(&mut self, screen_width: i32, screen_height: i32) {
+        self.canvas.x = screen_width / 2;
+        self.canvas.y = screen_height / 2;
     }
 
     fn update_canvas_position(&mut self) {
@@ -74,12 +70,10 @@ impl State {
         &mut self.image.layers[self.active_layer_idx]
     }
 }
-
 fn main() {
+    let mut p = Platform::new().unwrap();
 
-    let event_loop = EventLoop::new();
-    let mut gl = graphics::init(&event_loop);
-    let mut input = InputState::new();
+
 
     let mut save_button = Button::new(Rect::new(5, 5, 100, 30), "Save".into());
 
@@ -131,7 +125,7 @@ fn main() {
     let mut new_dialog = NewDialog::new(500, 500, 800, 600);
 
     let mut confirm_overwrite_dialog = ConfirmationDialog::new(
-        &gl,
+        &mut p,
         400,
         400,
         format!("Are you sure you want to overwrite {}?", "image.png"),
@@ -145,12 +139,15 @@ fn main() {
 
     let mut state = State::new();
 
-    event_loop.run(move |event, _, control_flow| {
-        *control_flow = ControlFlow::Poll;
-        input.update(&event);
+    'running: loop {
+        if let PlatformMessage::Quit = p.process_events() {
+            break 'running;
+        }
+
+
 
         let mut click_intercepted = false;
-        if save_button.update(&input, &mut click_intercepted) {
+        if save_button.update(&mut p, &mut click_intercepted) {
             let result = nfd::open_save_dialog(None, None).unwrap();
             match result {
                 FileDialogResponse::Okay(file_path) => {
@@ -159,7 +156,7 @@ fn main() {
                     if path.exists() {
                         confirm_overwrite_dialog.showing = true;
                         println!("Got here");
-                        if let Some(text) = confirm_overwrite_dialog.update(&input, &mut click_intercepted) {
+                        if let Some(text) = confirm_overwrite_dialog.update(&mut p, &mut click_intercepted) {
                             println!("Found button '{}'", text);
                             match &text[..] {
                                 "Yes" => {
@@ -192,10 +189,10 @@ fn main() {
             new_dialog.should_close = false;
             state.showing_new_dialog = false;
         }
-        if new_button.update(&input, &mut click_intercepted) {
+        if new_button.update(&mut p, &mut click_intercepted) {
             state.showing_new_dialog = true;
         }
-        if open_button.update(&input, &mut click_intercepted) {
+        if open_button.update(&mut p, &mut click_intercepted) {
             let result = nfd::open_file_dialog(None, None).unwrap();
             match result {
                 FileDialogResponse::Okay(file_path) => {
@@ -212,34 +209,34 @@ fn main() {
             }
         }
 
-        state.selected_color = color_selector.update(&input, &mut click_intercepted);
-        state.selected_tool = tool_selector.update(&input, &mut click_intercepted);
+        state.selected_color = color_selector.update(&mut p, &mut click_intercepted);
+        state.selected_tool = tool_selector.update(&mut p, &mut click_intercepted);
 
-        if input.key_down(Key::Q) {
-            *control_flow = ControlFlow::Exit;
+        if p.key_down(Key::Q) {
+            break 'running;
         }
 
-        if input.mouse_middle_pressed {
-            state.canvas_offset_baseline_x = input.mouse_x as i32;
-            state.canvas_offset_baseline_y = input.mouse_y as i32;
+        if p.mouse_middle_pressed {
+            state.canvas_offset_baseline_x = p.mouse_x as i32;
+            state.canvas_offset_baseline_y = p.mouse_y as i32;
         }
-        if input.mouse_middle_down {
-            state.canvas_offset_x = input.mouse_x as i32 - state.canvas_offset_baseline_x;
-            state.canvas_offset_y = input.mouse_y as i32 - state.canvas_offset_baseline_y;
+        if p.mouse_middle_down {
+            state.canvas_offset_x = p.mouse_x as i32 - state.canvas_offset_baseline_x;
+            state.canvas_offset_y = p.mouse_y as i32 - state.canvas_offset_baseline_y;
             state.update_canvas_position();
             state.canvas_offset_x = 0;
             state.canvas_offset_y = 0;
-            state.canvas_offset_baseline_x = input.mouse_x as i32;
-            state.canvas_offset_baseline_y = input.mouse_y as i32;
+            state.canvas_offset_baseline_x = p.mouse_x as i32;
+            state.canvas_offset_baseline_y = p.mouse_y as i32;
         }
 
-        if (input.mouse_left_pressed && !click_intercepted) || state.currently_drawing {
+        if (p.mouse_left_pressed && !click_intercepted) || state.currently_drawing {
             state.currently_drawing = true;
             let color = state.selected_color;
 
-            let (x, y) = state.screen_to_canvas(input.mouse_x, input.mouse_y);
-            let old_x = x - (input.mouse_delta_x / state.canvas_scale) as i32;
-            let old_y = y - (input.mouse_delta_y / state.canvas_scale) as i32;
+            let (x, y) = state.screen_to_canvas(p.mouse_x, p.mouse_y);
+            let old_x = x - (p.mouse_delta_x as f64 / state.canvas_scale) as i32;
+            let old_y = y - (p.mouse_delta_y as f64 / state.canvas_scale) as i32;
 
             match state.selected_tool.as_str() {
                 "Pencil" => state.active_layer().draw_line(old_x, old_y, x, y, color),
@@ -275,7 +272,7 @@ fn main() {
         }
 
         if state.showing_new_dialog {
-            if let Some(layer) = new_dialog.update(&input, &mut click_intercepted) {
+            if let Some(layer) = new_dialog.update(&mut p, &mut click_intercepted) {
                 // TODO safeguards!
                 let image = Image::new(layer.rect.width, layer.rect.height);
                 state.image = image;
@@ -284,60 +281,37 @@ fn main() {
             }
         }
 
-        if !input.mouse_left_down {
+        if !p.mouse_left_down {
             state.currently_drawing = false;
         }
 
-        confirm_overwrite_dialog.update(&input, &mut click_intercepted);
+        confirm_overwrite_dialog.update(&mut p, &mut click_intercepted);
 
-        match event {
-            Event::LoopDestroyed => *control_flow = ControlFlow::Exit,
-            Event::WindowEvent { event, .. } => match event {
-                WindowEvent::Resized(physical_size) => {
-                    gl.resize(physical_size);
-                    state.center_canvas(gl.window_width, gl.window_height);
-                }
-                WindowEvent::CloseRequested => {
-                    *control_flow = ControlFlow::Exit
-                }
-                WindowEvent::MouseWheel { delta, .. } => {
-                    match delta {
-                        MouseScrollDelta::LineDelta(_x, y) => {
-                            state.canvas_scale *= (10.0 + y as f64) / 10.0;
-                        }
-                        MouseScrollDelta::PixelDelta(d) => {
-                            state.canvas_scale *= (100.0 + d.y as f64) / 100.0;
-                        }
-                    }
-                    state.update_canvas_position();
-                }
-                _ => (),
-            },
-            Event::MainEventsCleared => {
-                gl.clear(Color::new(50, 50, 50, 255));
-                let rect = Rect::new(0, 0, state.image.width, state.image.height);
-                let src_rect = rect;
-                let dest_rect = Rect::new(
-                    state.canvas.x - (rect.width as f64 * state.canvas_scale / 2.0).round() as i32,
-                    state.canvas.y - (rect.height as f64 * state.canvas_scale / 2.0).round() as i32,
-                    (rect.width as f64 * state.canvas_scale) as u32,
-                    (rect.height as f64 * state.canvas_scale) as u32,
-                );
-                let blended = state.image.blend();
-                gl.draw_texture(src_rect, dest_rect, blended.data.clone().into_raw());
-                save_button.draw(&gl);
-                new_button.draw(&gl);
-                open_button.draw(&gl);
-                color_selector.draw(&gl);
-                tool_selector.draw(&gl);
-                gl.draw_text(&state.error_text, 5, gl.window_height - 30, 20.0, Color::new(255, 0, 0, 255));
-                if state.showing_new_dialog {
-                    new_dialog.draw(&gl);
-                }
-                confirm_overwrite_dialog.draw(&gl);
-                gl.swap();
-            },
-            _ => (),
+        let scroll_y = p.get_scroll_delta_y();
+        state.canvas_scale *= (10.0 + scroll_y as f64) / 10.0;
+
+
+        p.clear(Color::new(50, 50, 50, 255));
+        let rect = Rect::new(0, 0, state.image.width, state.image.height);
+        let src_rect = rect;
+        let dest_rect = Rect::new(
+            state.canvas.x - (rect.width as f64 * state.canvas_scale / 2.0).round() as i32,
+            state.canvas.y - (rect.height as f64 * state.canvas_scale / 2.0).round() as i32,
+            (rect.width as f64 * state.canvas_scale) as u32,
+            (rect.height as f64 * state.canvas_scale) as u32,
+        );
+        let blended = state.image.blend();
+        p.draw_texture(&mut blended.data.clone().into_raw(), src_rect, dest_rect);
+        save_button.draw(&mut p);
+        new_button.draw(&mut p);
+        open_button.draw(&mut p);
+        color_selector.draw(&mut p);
+        tool_selector.draw(&mut p);
+        p.draw_text(&state.error_text, 5, p.screen_height - 30, 20.0, Color::new(255, 0, 0, 255));
+        if state.showing_new_dialog {
+            new_dialog.draw(&mut p);
         }
-    });
+        confirm_overwrite_dialog.draw(&mut p);
+        p.present();
+    }
 }

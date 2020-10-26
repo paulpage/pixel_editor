@@ -1,12 +1,12 @@
+use sdl2::keyboard::Keycode as Key;
+
 use super::util::{Color, Rect};
-use super::graphics::Graphics;
-use super::input::InputState;
+use super::platform::Platform;
 use super::layer::{Layer, Image};
-use glutin::event::VirtualKeyCode as Key;
 
 pub trait Widget<T> {
-    fn draw(&self, graphics: &Graphics);
-    fn update(&mut self, input: &InputState, click_intercepted: &mut bool) -> T;
+    fn draw(&self, p: &mut Platform);
+    fn update(&mut self, platform: &mut Platform, click_intercepted: &mut bool) -> T;
 }
 
 pub struct ConfirmationDialog {
@@ -17,8 +17,8 @@ pub struct ConfirmationDialog {
 }
 
 impl ConfirmationDialog {
-    pub fn new(graphics: &Graphics, x: i32, y: i32, message: String, options: Vec<String>) -> Self {
-        let (_, text_width, _) = graphics.layout_text(&message, 20.0);
+    pub fn new(p: &mut Platform, x: i32, y: i32, message: String, options: Vec<String>) -> Self {
+        let (_, text_width, _) = p.layout_text(&message, 20.0);
         let width = std::cmp::max(
             text_width as u32 + 10,
             options.len() as u32 * 105 + 5
@@ -38,21 +38,21 @@ impl ConfirmationDialog {
 }
 
 impl Widget<Option<String>> for ConfirmationDialog {
-    fn draw(&self, graphics: &Graphics) {
+    fn draw(&self, p: &mut Platform) {
         if self.showing {
-            graphics.draw_rect(self.rect, Color::GRAY);
-            graphics.draw_text(&self.message, self.rect.x + 5, self.rect.y + 5, 20.0, Color::BLACK);
+            p.draw_rect(self.rect, Color::GRAY);
+            p.draw_text(&self.message, self.rect.x + 5, self.rect.y + 5, 20.0, Color::BLACK);
             for button in &self.buttons {
-                button.draw(graphics);
+                button.draw(p);
             }
         }
     }
 
-    fn update(&mut self, input: &InputState, mouse_intercepted: &mut bool) -> Option<String> {
+    fn update(&mut self, p: &mut Platform, mouse_intercepted: &mut bool) -> Option<String> {
         if self.showing {
-            // *mouse_intercepted = self.rect.contains_point(input.mouse_x as i32, input.mouse_y as i32) && input.mouse_left_down || *mouse_intercepted;
+            // *mouse_intercepted = self.rect.contains_point(p.mouse_x as i32, p.mouse_y as i32) && p.mouse_left_down || *mouse_intercepted;
             for button in &mut self.buttons {
-                if button.update(input, mouse_intercepted) {
+                if button.update(p, mouse_intercepted) {
                     println!("yah");
                     return Some(button.text.clone());
                 }
@@ -88,31 +88,31 @@ impl NewDialog {
 }
 
 impl Widget<Option<Layer>> for NewDialog {
-    fn draw(&self, graphics: &Graphics) {
-        graphics.draw_rect(self.rect, Color::GRAY);
-        graphics.draw_text("Width:", self.rect.x + 5, self.rect.y + 10, 20.0, Color::BLACK);
-        graphics.draw_text("Height:", self.rect.x + 5, self.rect.y + 40, 20.0, Color::BLACK);
-        self.width_field.draw(graphics);
-        self.height_field.draw(graphics);
-        self.ok_button.draw(graphics);
-        self.cancel_button.draw(graphics);
+    fn draw(&self, p: &mut Platform) {
+        p.draw_rect(self.rect, Color::GRAY);
+        p.draw_text("Width:", self.rect.x + 5, self.rect.y + 10, 20.0, Color::BLACK);
+        p.draw_text("Height:", self.rect.x + 5, self.rect.y + 40, 20.0, Color::BLACK);
+        self.width_field.draw(p);
+        self.height_field.draw(p);
+        self.ok_button.draw(p);
+        self.cancel_button.draw(p);
     }
 
-    fn update(&mut self, input: &InputState, mouse_intercepted: &mut bool) -> Option<Layer> {
+    fn update(&mut self, p: &mut Platform, mouse_intercepted: &mut bool) -> Option<Layer> {
         // TODO
-        if self.width_field.update(input, mouse_intercepted) {
+        if self.width_field.update(p, mouse_intercepted) {
             self.height_field.active = false;
         }
-        if self.height_field.update(input, mouse_intercepted) {
+        if self.height_field.update(p, mouse_intercepted) {
             self.width_field.active = false;
         }
-        if self.ok_button.update(input, mouse_intercepted) {
+        if self.ok_button.update(p, mouse_intercepted) {
             if let (Ok(width), Ok(height)) = (self.width_field.text.parse(), self.height_field.text.parse()) {
                 self.should_close = true;
                 return Some(Layer::new(Rect::new(0, 0, width, height)))
             }
         }
-        if self.cancel_button.update(input, mouse_intercepted) {
+        if self.cancel_button.update(p, mouse_intercepted) {
             self.should_close = true;
         }
 
@@ -158,26 +158,26 @@ enum ButtonState {
 }
 
 impl Widget<bool> for Button {
-    fn draw(&self, graphics: &Graphics) {
+    fn draw(&self, p: &mut Platform) {
         let (button_color, text_color) = match self.state {
             ButtonState::Released => (self.color, self.text_color),
             ButtonState::Hovered => (self.color_hovered, self.text_color_hovered),
             ButtonState::Pressed => (self.color_pressed, self.text_color_pressed),
         };
-        graphics.draw_rect(self.rect, button_color);
-        graphics.draw_text(&self.text, self.rect.x + 5, self.rect.y + 5, self.text_size, text_color);
+        p.draw_rect(self.rect, button_color);
+        p.draw_text(&self.text, self.rect.x + 5, self.rect.y + 5, self.text_size, text_color);
     }
 
-    fn update(&mut self, input: &InputState, mouse_intercepted: &mut bool) -> bool {
-        *mouse_intercepted = self.rect.contains_point(input.mouse_x as i32, input.mouse_y as i32) && input.mouse_left_down || *mouse_intercepted;
-        if self.rect.contains_point(input.mouse_x as i32, input.mouse_y as i32) {
-            if input.mouse_left_down {
+    fn update(&mut self, p: &mut Platform, mouse_intercepted: &mut bool) -> bool {
+        *mouse_intercepted = self.rect.contains_point(p.mouse_x as i32, p.mouse_y as i32) && p.mouse_left_down || *mouse_intercepted;
+        if self.rect.contains_point(p.mouse_x as i32, p.mouse_y as i32) {
+            if p.mouse_left_down {
                 self.state = ButtonState::Pressed;
             } else {
                 self.state = ButtonState::Hovered;
             }
 
-            if input.mouse_left_pressed {
+            if p.mouse_left_pressed {
                 return true;
             }
         } else {
@@ -208,23 +208,23 @@ impl TextBox {
 }
 
 impl Widget<bool> for TextBox {
-    fn draw(&self, graphics: &Graphics) {
-        graphics.draw_rect(self.rect, Color::BLACK);
-        graphics.draw_rect(Rect::new(self.rect.x + 2, self.rect.y + 2, self.rect.width - 4, self.rect.height - 4), Color::WHITE);
-        let text_rect = graphics.draw_text(&self.text, self.rect.x + 4, self.rect.y + 4, 20.0, Color::BLACK);
+    fn draw(&self, p: &mut Platform) {
+        p.draw_rect(self.rect, Color::BLACK);
+        p.draw_rect(Rect::new(self.rect.x + 2, self.rect.y + 2, self.rect.width - 4, self.rect.height - 4), Color::WHITE);
+        let text_rect = p.draw_text(&self.text, self.rect.x + 4, self.rect.y + 4, 20.0, Color::BLACK);
         if self.active {
-            graphics.draw_rect(Rect::new(text_rect.x + text_rect.width as i32, text_rect.y, 5, text_rect.height), Color::BLACK);
+            p.draw_rect(Rect::new(text_rect.x + text_rect.width as i32, text_rect.y, 5, text_rect.height), Color::BLACK);
         }
     }
 
-    fn update(&mut self, input: &InputState, mouse_intercepted: &mut bool) -> bool {
-        *mouse_intercepted = self.rect.contains_point(input.mouse_x as i32, input.mouse_y as i32) && input.mouse_left_down || *mouse_intercepted;
-        self.active = (self.rect.contains_point(input.mouse_x as i32, input.mouse_y as i32) && input.mouse_left_pressed) || self.active;
+    fn update(&mut self, p: &mut Platform, mouse_intercepted: &mut bool) -> bool {
+        *mouse_intercepted = self.rect.contains_point(p.mouse_x as i32, p.mouse_y as i32) && p.mouse_left_down || *mouse_intercepted;
+        self.active = (self.rect.contains_point(p.mouse_x as i32, p.mouse_y as i32) && p.mouse_left_pressed) || self.active;
         if self.active {
-            self.text.push_str(&input.text_entered());
-            for key in &input.keys_pressed {
+            self.text.push_str(&p.text_entered());
+            for key in &p.keys_pressed {
                 match key {
-                    Key::Back => {
+                    Key::Backspace => {
                         self.text.pop();
                     }
                     _ => {}
@@ -277,11 +277,11 @@ impl ColorSelector {
 }
 
 impl Widget<Color> for ColorSelector {
-    fn draw(&self, graphics: &Graphics) {
-        graphics.draw_rect(self.rect, Color::new(50, 50, 50, 255));
+    fn draw(&self, p: &mut Platform) {
+        p.draw_rect(self.rect, Color::new(50, 50, 50, 255));
         for (i, rect) in self.rects.iter().enumerate() {
             if i == self.selected_color_idx {
-                graphics.draw_rect(
+                p.draw_rect(
                     Rect::new(
                         rect.x - 2,
                         rect.y - 2,
@@ -292,15 +292,15 @@ impl Widget<Color> for ColorSelector {
                 );
             }
 
-            graphics.draw_rect(*rect, self.colors[i]);
+            p.draw_rect(*rect, self.colors[i]);
         }
     }
 
-    fn update(&mut self, input: &InputState, mouse_intercepted: &mut bool) -> Color {
-        *mouse_intercepted = self.rect.contains_point(input.mouse_x as i32, input.mouse_y as i32) && input.mouse_left_down || *mouse_intercepted;
-        if self.rect.contains_point(input.mouse_x as i32, input.mouse_y as i32) && input.mouse_left_pressed {
+    fn update(&mut self, p: &mut Platform, mouse_intercepted: &mut bool) -> Color {
+        *mouse_intercepted = self.rect.contains_point(p.mouse_x as i32, p.mouse_y as i32) && p.mouse_left_down || *mouse_intercepted;
+        if self.rect.contains_point(p.mouse_x as i32, p.mouse_y as i32) && p.mouse_left_pressed {
             for (i, rect) in self.rects.iter().enumerate() {
-                if rect.contains_point(input.mouse_x as i32, input.mouse_y as i32) {
+                if rect.contains_point(p.mouse_x as i32, p.mouse_y as i32) {
                     self.selected_color_idx = i;
                     return self.colors[i]
                 }
@@ -347,11 +347,11 @@ impl ToolSelector {
 
 impl Widget<String> for ToolSelector {
 
-    fn draw(&self, graphics: &Graphics) {
-        graphics.draw_rect(self.rect, Color::new(20, 20, 20, 255));
+    fn draw(&self, p: &mut Platform) {
+        p.draw_rect(self.rect, Color::new(20, 20, 20, 255));
         for (i, rect) in self.rects.iter().enumerate() {
             if i == self.selected_tool_idx {
-                graphics.draw_rect(
+                p.draw_rect(
                     Rect::new(
                         rect.x - 2,
                         rect.y - 2,
@@ -362,16 +362,16 @@ impl Widget<String> for ToolSelector {
                 );
             }
 
-            graphics.draw_rect(*rect, Color::new(100, 100, 100, 255));
-            graphics.draw_text(&self.labels[i], rect.x + 4, rect.y + 4, 20.0, Color::BLACK);
+            p.draw_rect(*rect, Color::new(100, 100, 100, 255));
+            p.draw_text(&self.labels[i], rect.x + 4, rect.y + 4, 20.0, Color::BLACK);
         }
     }
 
-    fn update(&mut self, input: &InputState, mouse_intercepted: &mut bool) -> String {
-        *mouse_intercepted = self.rect.contains_point(input.mouse_x as i32, input.mouse_y as i32) && input.mouse_left_down || *mouse_intercepted;
-        if self.rect.contains_point(input.mouse_x as i32, input.mouse_y as i32) && input.mouse_left_pressed {
+    fn update(&mut self, p: &mut Platform, mouse_intercepted: &mut bool) -> String {
+        *mouse_intercepted = self.rect.contains_point(p.mouse_x as i32, p.mouse_y as i32) && p.mouse_left_down || *mouse_intercepted;
+        if self.rect.contains_point(p.mouse_x as i32, p.mouse_y as i32) && p.mouse_left_pressed {
             for (i, rect) in self.rects.iter().enumerate() {
-                if rect.contains_point(input.mouse_x as i32, input.mouse_y as i32) {
+                if rect.contains_point(p.mouse_x as i32, p.mouse_y as i32) {
                     self.selected_tool_idx = i;
                     return self.labels[i].clone()
                 }
