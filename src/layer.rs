@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use image::RgbaImage;
+// use image::RgbaImage;
 use image::error::ImageError;
 use super::util::{Rect, Color};
 use std::path::Path;
@@ -9,7 +9,7 @@ use std::cmp::{min, max};
 
 pub struct Layer {
     pub rect: Rect,
-    pub data: image::RgbaImage,
+    pub data: Vec<u8>,
     pub z_index: i32,
 }
 
@@ -26,7 +26,8 @@ pub struct ImageHistory {
 
 impl Layer {
     pub fn new(rect: Rect) -> Self {
-        let data = RgbaImage::from_pixel(rect.width, rect.height, [255, 255, 255, 255].into());
+        let data = vec![255; (rect.width * rect.height * 4) as usize];
+        // let data = RgbaImage::from_pixel(rect.width, rect.height, [255, 255, 255, 255].into());
         Self {
             rect,
             data,
@@ -38,14 +39,18 @@ impl Layer {
         let img = image::open(path)?.to_rgba();
         Ok(Self {
             rect: Rect::new(x, y, img.width(), img.height()),
-            data: img,
+            data: img.into_raw(),
             z_index: 0,
         })
     }
 
     pub fn draw_pixel(&mut self, x: i32, y: i32, color: Color) {
         if self.rect.contains_point(x, y) {
-            self.data.put_pixel(x as u32, y as u32, [color.r, color.g, color.b, color.a].into());
+            let i = (y * self.rect.width as i32 + x) as usize * 4;
+            self.data[i] = color.r;
+            self.data[i + 1] = color.g;
+            self.data[i + 2] = color.b;
+            self.data[i + 3] = color.a;
         }
     }
 
@@ -66,8 +71,14 @@ impl Layer {
 
     pub fn get_pixel(&self, x: i32, y: i32) -> Option<Color> {
         if self.rect.contains_point(x, y) {
-            let color = self.data.get_pixel(x as u32, y as u32);
-            return Some(Color::new(color[0], color[1], color[2], color[3]))
+            let i = (y * self.rect.width as i32 + x) as usize * 4;
+            let c = Color::new(
+                self.data[i],
+                self.data[i + 1],
+                self.data[i + 2],
+                self.data[i + 3]
+            );
+            return Some(c)
         }
         None
     }
@@ -118,21 +129,27 @@ impl Layer {
             for y in max(0, other.rect.y)..other.rect.y + height {
                 for x in max(0, other.rect.x)..min(self.rect.width as i32, other.rect.x + width) {
 
+                    // The cases where alpha is 0 or 255 are the most common, so make those fast
+                    // let other_color = other.data.get_pixel((x - other.rect.x) as u32, (y - other.rect.y) as u32);
+                    let oi = ((y - other.rect.y) * other.rect.width as i32 + (x - other.rect.x)) as usize * 4;
+                    if other.data[oi + 3] == 0 {
+                        continue;
+                    }
+                    if other.data[oi + 3] == 255 {
+                        let i = (y * self.rect.width as i32 + x) as usize * 4;
+                        self.data[i] = other.data[oi];
+                        self.data[i + 1] = other.data[oi + 1];
+                        self.data[i + 2] = other.data[oi + 2];
+                        self.data[i + 3] = other.data[oi + 3];
+                        continue;
+                    }
+
                     let base_color = self.get_pixel(x, y).unwrap();
                     let other_color = other.get_pixel(x - other.rect.x, y - other.rect.y).unwrap();
-
-                    if other_color.a == 0 {
-                        continue;
-                    }
-                    if other_color.a == 255 {
-                        self.draw_pixel(x, y, other_color);
-                        continue;
-                    }
 
                     let a1 = other_color.a as f64 / 255.0;
                     let a2 = base_color.a as f64 / 255.0;
                     let factor = a2 * (1.0 - a1);
-
                     
                     let new_color = Color {
                         r: (base_color.r as f64 * a1 + other_color.r as f64 * factor / (a1 + factor)) as u8,
@@ -201,15 +218,25 @@ impl Image {
         let mut base = Layer::new(Rect::new(0, 0, self.width, self.height));
         for layer in &self.layers {
             base.blend(layer);
+            base.blend(layer);
+            base.blend(layer);
+            base.blend(layer);
+            base.blend(layer);
+            base.blend(layer);
+            base.blend(layer);
+            base.blend(layer);
+            base.blend(layer);
+            base.blend(layer);
         }
         base
     }
 
     pub fn save(&self, path: &Path) -> Result<(), ()> {
         let blended = self.blend();
-        match blended.data.save(path) {
-            Ok(()) => Ok(()),
-            Err(_) => Err(()),
-        }
+        Err(())
+        // match blended.data.save(path) {
+        //     Ok(()) => Ok(()),
+        //     Err(_) => Err(()),
+        // }
     }
 }

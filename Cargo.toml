@@ -15,4 +15,4 @@ nfd = "0.0.4"
 [dependencies.sdl2]
 version = "0.34"
 default-features = false
-features = ["bundled", "unsafe_textures"]
+features = ["bundled"]

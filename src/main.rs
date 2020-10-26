@@ -2,6 +2,8 @@ use sdl2::keyboard::Keycode as Key;
 use std::path::Path;
 use nfd::Response as FileDialogResponse;
 
+use std::time::{Instant, Duration};
+
 mod layer;
 use layer::{Image, ImageHistory, Layer};
 
@@ -140,9 +142,12 @@ fn main() {
     let mut state = State::new();
 
     'running: loop {
+        let mut t = Instant::now();
         if let PlatformMessage::Quit = p.process_events() {
             break 'running;
         }
+        print!("events={:?}, ", t.elapsed());
+        t = Instant::now();
 
 
 
@@ -290,6 +295,8 @@ fn main() {
         let scroll_y = p.get_scroll_delta_y();
         state.canvas_scale *= (10.0 + scroll_y as f64) / 10.0;
 
+        print!("state={:?}, ", t.elapsed());
+        t = Instant::now();
 
         p.clear(Color::new(50, 50, 50, 255));
         let rect = Rect::new(0, 0, state.image.width, state.image.height);
@@ -300,8 +307,12 @@ fn main() {
             (rect.width as f64 * state.canvas_scale) as u32,
             (rect.height as f64 * state.canvas_scale) as u32,
         );
-        let blended = state.image.blend();
-        p.draw_texture(&mut blended.data.clone().into_raw(), src_rect, dest_rect);
+        print!("draw1={:?}, ", t.elapsed());
+        t = Instant::now();
+        let mut blended = state.image.blend();
+        print!("blend={:?}, ", t.elapsed());
+        t = Instant::now();
+        p.draw_texture(&mut blended.data, src_rect, dest_rect);
         save_button.draw(&mut p);
         new_button.draw(&mut p);
         open_button.draw(&mut p);
@@ -312,6 +323,16 @@ fn main() {
             new_dialog.draw(&mut p);
         }
         confirm_overwrite_dialog.draw(&mut p);
+
+        print!("draw2={:?}, ", t.elapsed());
+        t = Instant::now();
+
         p.present();
+
+        println!("present={:?}", t.elapsed());
+        t = Instant::now();
+
+
+        std::thread::sleep(Duration::from_millis(1));
     }
 }

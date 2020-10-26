@@ -5,7 +5,7 @@ use sdl2::event::{Event, WindowEvent};
 use sdl2::mouse::MouseButton;
 use sdl2::keyboard::Keycode;
 use sdl2::surface::Surface;
-use sdl2::render::WindowCanvas;
+use sdl2::render::{WindowCanvas, TextureCreator};
 use sdl2::{EventPump, Sdl, VideoSubsystem};
 use sdl2::keyboard::Mod;
 use rusttype::{point, Scale, PositionedGlyph, Font};
@@ -336,7 +336,8 @@ impl Platform {
         // texture this'll have to change. For now src_rect just tells you how big the data
         // is.
         let surface = Surface::from_data(buffer, src_rect.width, src_rect.height, 4 * src_rect.width, PixelFormatEnum::ABGR8888).unwrap();
-        let texture = self.canvas.texture_creator().create_texture_from_surface(&surface).unwrap();
+        let creator = self.canvas.texture_creator();
+        let texture = creator.create_texture_from_surface(&surface).unwrap();
         let dest_rect = SdlRect::new(dest_rect.x, dest_rect.y, dest_rect.width, dest_rect.height);
         self.canvas.copy(&texture, None, Some(dest_rect));
     }
