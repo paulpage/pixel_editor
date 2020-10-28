@@ -140,6 +140,13 @@ fn main() {
     confirm_overwrite_dialog.showing = false;
 
     let mut state = State::new();
+    for _ in 0..10 {
+        let mut layer = Layer::new(Rect::new(0, 0, 800, 600));
+        for i in 0..layer.data.len() {
+            layer.data[i] = 255;
+        }
+        state.image.layers.push(layer);
+    }
 
     'running: loop {
         let mut t = Instant::now();

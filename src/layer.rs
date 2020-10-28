@@ -26,7 +26,7 @@ pub struct ImageHistory {
 
 impl Layer {
     pub fn new(rect: Rect) -> Self {
-        let data = vec![255; (rect.width * rect.height * 4) as usize];
+        let data = vec![0; (rect.width * rect.height * 4) as usize];
         // let data = RgbaImage::from_pixel(rect.width, rect.height, [255, 255, 255, 255].into());
         Self {
             rect,
@@ -137,10 +137,15 @@ impl Layer {
                     }
                     if other.data[oi + 3] == 255 {
                         let i = (y * self.rect.width as i32 + x) as usize * 4;
-                        self.data[i] = other.data[oi];
-                        self.data[i + 1] = other.data[oi + 1];
-                        self.data[i + 2] = other.data[oi + 2];
-                        self.data[i + 3] = other.data[oi + 3];
+                        self.data[i] = 255;
+                        self.data[i + 1] = 255;
+                        self.data[i + 2] = 255;
+                        self.data[i + 3] = 255;
+                        // self.data[i] = other.data[oi];
+                        // self.data[i] = other.data[oi];
+                        // self.data[i + 1] = other.data[oi + 1];
+                        // self.data[i + 2] = other.data[oi + 2];
+                        // self.data[i + 3] = other.data[oi + 3];
                         continue;
                     }
 
@@ -216,18 +221,68 @@ impl Image {
 
     pub fn blend(&self) -> Layer {
         let mut base = Layer::new(Rect::new(0, 0, self.width, self.height));
-        for layer in &self.layers {
-            base.blend(layer);
-            base.blend(layer);
-            base.blend(layer);
-            base.blend(layer);
-            base.blend(layer);
-            base.blend(layer);
-            base.blend(layer);
-            base.blend(layer);
-            base.blend(layer);
-            base.blend(layer);
+        for layer in self.layers.iter().rev() {
+            let width = min(layer.rect.width as i32, base.rect.width as i32 - layer.rect.x);
+            let height = min(layer.rect.height as i32, base.rect.height as i32 - layer.rect.y);
+            if base.rect.width >= layer.rect.width && base.rect.height >= layer.rect.height {
+                for y in max(0, layer.rect.y)..layer.rect.y + height {
+                    for x in max(0, layer.rect.x)..min(base.rect.width as i32, layer.rect.x + width) {
+
+                        let i = (y * base.rect.width as i32 + x) as usize * 4;
+                        if base.data[i] == 255 {
+                            continue;
+                        }
+
+                        // The cases where alpha is 0 or 255 are the most common, so make those fast
+                        // let layer_color = layer.data.get_pixel((x - layer.rect.x) as u32, (y - layer.rect.y) as u32);
+                        let oi = ((y - layer.rect.y) * layer.rect.width as i32 + (x - layer.rect.x)) as usize * 4;
+                        if layer.data[oi + 3] == 0 {
+                            continue;
+                        }
+                        if layer.data[oi + 3] == 255 {
+                            // let i = (y * base.rect.width as i32 + x) as usize * 4;
+                            base.data[i] = layer.data[oi];
+                            base.data[i + 1] = layer.data[oi + 1];
+                            base.data[i + 2] = layer.data[oi + 2];
+                            base.data[i + 3] = layer.data[oi + 3];
+                            continue;
+                        }
+
+
+                        // TODO all this logic has to get inverted since we're going
+                        // backwards
+
+                        let base_color = base.get_pixel(x, y).unwrap();
+                        let layer_color = layer.get_pixel(x - layer.rect.x, y - layer.rect.y).unwrap();
+
+                        let a1 = layer_color.a as f64 / 255.0;
+                        let a2 = base_color.a as f64 / 255.0;
+                        let factor = a2 * (1.0 - a1);
+
+                        let new_color = Color {
+                            r: (base_color.r as f64 * a1 + layer_color.r as f64 * factor / (a1 + factor)) as u8,
+                            g: (base_color.r as f64 * a1 + layer_color.r as f64 * factor / (a1 + factor)) as u8,
+                            b: (base_color.r as f64 * a1 + layer_color.r as f64 * factor / (a1 + factor)) as u8,
+                            a: (base_color.r as f64 * a1 + layer_color.r as f64 * factor / (a1 + factor)) as u8,
+                        };
+                        base.draw_pixel(x, y, new_color);
+                    }
+                }
+                // return true;
+            }
         }
+        // for layer in self.layers.iter().rev() {
+        //     base.blend(layer);
+            // base.blend(layer);
+            // base.blend(layer);
+            // base.blend(layer);
+            // base.blend(layer);
+            // base.blend(layer);
+            // base.blend(layer);
+            // base.blend(layer);
+            // base.blend(layer);
+            // base.blend(layer);
+        // }
         base
     }
 
