@@ -9,6 +9,60 @@ pub trait Widget<T> {
     fn update(&mut self, platform: &mut Platform, click_intercepted: &mut bool) -> T;
 }
 
+pub struct LayerSelector {
+    rect: Rect,
+    buttons: Vec<Button>,
+}
+
+impl LayerSelector {
+    pub fn new(rect: Rect) -> Self {
+        Self {
+            rect,
+            buttons: Vec::new(),
+        }
+    }
+
+    pub fn refresh(&mut self, image: &Image, active_layer_index: usize) {
+        self.buttons.clear();
+        for (i, layer) in image.layers.iter().enumerate() {
+            let mut button = Button::new(
+                Rect::new(
+                    self.rect.x,
+                    self.rect.y + i as i32 * 20,
+                    200,
+                    25
+                ),
+                layer.name.clone()
+            );
+            if i == active_layer_index {
+                button.color = Color::new(200, 200, 0, 255);
+                button.color_hovered = Color::new(255, 255, 0, 255);
+                button.color_pressed = Color::new(150, 150, 0, 255);
+            }
+            self.buttons.push(button);
+        }
+    }
+}
+
+impl Widget<Option<usize>> for LayerSelector {
+    fn draw(&self, p: &mut Platform) {
+        p.draw_rect(self.rect, Color::GRAY);
+        for button in &self.buttons {
+            button.draw(p);
+        }
+    }
+
+    fn update(&mut self, p: &mut Platform, mouse_intercepted: &mut bool) -> Option<usize> {
+        *mouse_intercepted = self.rect.contains_point(p.mouse_x as i32, p.mouse_y as i32) && p.mouse_left_down || *mouse_intercepted;
+        for (i, button) in self.buttons.iter_mut().enumerate() {
+            if button.update(p, mouse_intercepted) {
+                return Some(i);
+            }
+        }
+        None
+    }
+}
+
 pub struct ConfirmationDialog {
     message: String,
     buttons: Vec<Button>,

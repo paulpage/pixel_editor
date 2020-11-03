@@ -7,12 +7,15 @@ use std::path::Path;
 use std::collections::VecDeque;
 use std::cmp::{min, max};
 
+#[derive(Clone)]
 pub struct Layer {
     pub rect: Rect,
     pub data: Vec<u8>,
     pub z_index: i32,
+    pub name: String,
 }
 
+#[derive(Clone)]
 pub struct Image {
     pub width: u32,
     pub height: u32,
@@ -20,8 +23,39 @@ pub struct Image {
 }
 
 pub struct ImageHistory {
+    idx: i64,
     snapshots: Vec<Image>,
-    idx: i32,
+}
+
+impl ImageHistory {
+    pub fn new() -> Self {
+        Self {
+            idx: -1,
+            snapshots: Vec::new(),
+        }
+    }
+
+    pub fn take_snapshot(&mut self, image: &Image) {
+        self.snapshots.truncate((self.idx + 1) as usize);
+        self.snapshots.push(image.clone());
+        self.idx += 1;
+    }
+
+    pub fn undo(&mut self, image: Image) -> Image {
+        if self.idx > 0 {
+            self.idx -= 1;
+            return self.snapshots[self.idx as usize].clone();
+        }
+        image
+    }
+
+    pub fn redo(&mut self, image: Image) -> Image {
+        if self.idx as usize + 1 < self.snapshots.len() {
+            self.idx += 1;
+            return self.snapshots[self.idx as usize].clone();
+        }
+        image
+    }
 }
 
 impl Layer {
@@ -32,6 +66,7 @@ impl Layer {
             rect,
             data,
             z_index: 0,
+            name: "Unnamed Layer".into(),
         }
     }
 
@@ -41,6 +76,7 @@ impl Layer {
             rect: Rect::new(x, y, img.width(), img.height()),
             data: img.into_raw(),
             z_index: 0,
+            name: "Unnamed Layer".into(),
         })
     }
 
@@ -211,14 +247,6 @@ impl Image {
         // TODO
     }
 
-    pub fn undo(&mut self, history: &mut ImageHistory) {
-        // TODO
-    }
-
-    pub fn redo(&mut self, history: &mut ImageHistory) {
-        // TODO
-    }
-
     pub fn blend(&self) -> Layer {
         let mut base = Layer::new(Rect::new(0, 0, self.width, self.height));
         for layer in self.layers.iter().rev() {
@@ -229,18 +257,16 @@ impl Image {
                     for x in max(0, layer.rect.x)..min(base.rect.width as i32, layer.rect.x + width) {
 
                         let i = (y * base.rect.width as i32 + x) as usize * 4;
-                        if base.data[i] == 255 {
+                        if base.data[i + 3] == 255 {
                             continue;
                         }
 
                         // The cases where alpha is 0 or 255 are the most common, so make those fast
-                        // let layer_color = layer.data.get_pixel((x - layer.rect.x) as u32, (y - layer.rect.y) as u32);
                         let oi = ((y - layer.rect.y) * layer.rect.width as i32 + (x - layer.rect.x)) as usize * 4;
                         if layer.data[oi + 3] == 0 {
                             continue;
                         }
                         if layer.data[oi + 3] == 255 {
-                            // let i = (y * base.rect.width as i32 + x) as usize * 4;
                             base.data[i] = layer.data[oi];
                             base.data[i + 1] = layer.data[oi + 1];
                             base.data[i + 2] = layer.data[oi + 2];
@@ -268,26 +294,14 @@ impl Image {
                         base.draw_pixel(x, y, new_color);
                     }
                 }
-                // return true;
             }
         }
-        // for layer in self.layers.iter().rev() {
-        //     base.blend(layer);
-            // base.blend(layer);
-            // base.blend(layer);
-            // base.blend(layer);
-            // base.blend(layer);
-            // base.blend(layer);
-            // base.blend(layer);
-            // base.blend(layer);
-            // base.blend(layer);
-            // base.blend(layer);
-        // }
         base
     }
 
     pub fn save(&self, path: &Path) -> Result<(), ()> {
         let blended = self.blend();
+        // TODO
         Err(())
         // match blended.data.save(path) {
         //     Ok(()) => Ok(()),

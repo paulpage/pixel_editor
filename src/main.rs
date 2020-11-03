@@ -11,10 +11,16 @@ mod util;
 use util::{Rect, Color};
 
 mod gui;
-use gui::{Widget, Button, ColorSelector, ToolSelector, NewDialog, ConfirmationDialog};
+use gui::{Widget, Button, ColorSelector, ToolSelector, NewDialog, ConfirmationDialog, LayerSelector};
 
 mod platform;
 use platform::{Platform, PlatformMessage};
+
+// TODO If you draw with the touchscreen, there will be lines connecting your separate drawings.
+// This is not because the up and down events aren't registered, but because the mouse position
+// isn't being updated (how could it? the computer can't see your finger moving if it's not on the
+// screen). So we'll either have to see if we can update the position right away when the finger
+// goes down or add finger tracking to the platform layer so we can handle that properly.
 
 struct State {
     image: Image,
@@ -27,6 +33,7 @@ struct State {
     canvas_offset_baseline_y: i32,
     selected_color: Color,
     selected_tool: String,
+    brush_size: i32,
     currently_drawing: bool,
     // TODO better way to handle dialog boxes please
     showing_new_dialog: bool,
@@ -46,6 +53,7 @@ impl State {
             canvas_offset_baseline_y: 0,
             selected_color: Color::BLACK,
             selected_tool: "Pencil".into(),
+            brush_size: 20,
             currently_drawing: false,
             showing_new_dialog: false,
             error_text: "".into(),
@@ -72,15 +80,17 @@ impl State {
         &mut self.image.layers[self.active_layer_idx]
     }
 }
+
 fn main() {
     let mut p = Platform::new().unwrap();
 
-
-
     let mut save_button = Button::new(Rect::new(5, 5, 100, 30), "Save".into());
-
     let mut new_button = Button::new(Rect::new(110, 5, 100, 30), "New".into());
     let mut open_button = Button::new(Rect::new(215, 5, 100, 30), "Open".into());
+    let mut undo_button = Button::new(Rect::new(320, 5, 100, 30), "Undo".into());
+    let mut redo_button = Button::new(Rect::new(425, 5, 100, 30), "Redo".into());
+    let mut new_layer_button = Button::new(Rect::new(530, 5, 100, 30), "Add Layer".into());
+
     let mut color_selector = ColorSelector::new(
         Rect::new(5, 50, 50, 1000),
         vec![
@@ -122,8 +132,11 @@ fn main() {
             "Color Picker".into(),
             "Paint Bucket".into(),
             "Spray Can".into(),
+            "Eraser".into(),
         ],
     );
+    let mut layer_selector = LayerSelector::new(Rect::new(300, 300, 300, 300));
+
     let mut new_dialog = NewDialog::new(500, 500, 800, 600);
 
     let mut confirm_overwrite_dialog = ConfirmationDialog::new(
@@ -140,23 +153,18 @@ fn main() {
     confirm_overwrite_dialog.showing = false;
 
     let mut state = State::new();
-    for _ in 0..10 {
-        let mut layer = Layer::new(Rect::new(0, 0, 800, 600));
-        for i in 0..layer.data.len() {
-            layer.data[i] = 255;
-        }
-        state.image.layers.push(layer);
-    }
+    let mut history = ImageHistory::new();
+
+    // TODO do we want to make the background a pattern (like white or checkers) instead of or in
+    // addition to making the first layer solid white?
+    state.image.layers[0].fill(0, 0, Color::WHITE);
+    history.take_snapshot(&state.image);
+    layer_selector.refresh(&state.image, state.active_layer_idx);
 
     'running: loop {
-        let mut t = Instant::now();
         if let PlatformMessage::Quit = p.process_events() {
             break 'running;
         }
-        print!("events={:?}, ", t.elapsed());
-        t = Instant::now();
-
-
 
         let mut click_intercepted = false;
         if save_button.update(&mut p, &mut click_intercepted) {
@@ -167,9 +175,7 @@ fn main() {
                     let mut write_file = false;
                     if path.exists() {
                         confirm_overwrite_dialog.showing = true;
-                        println!("Got here");
                         if let Some(text) = confirm_overwrite_dialog.update(&mut p, &mut click_intercepted) {
-                            println!("Found button '{}'", text);
                             match &text[..] {
                                 "Yes" => {
                                     confirm_overwrite_dialog.showing = false;
@@ -220,11 +226,27 @@ fn main() {
                 FileDialogResponse::Cancel => {}
             }
         }
+        if undo_button.update(&mut p, &mut click_intercepted) {
+            state.image = history.undo(state.image);
+        }
+        if redo_button.update(&mut p, &mut click_intercepted) {
+            state.image = history.redo(state.image);
+        }
+        if new_layer_button.update(&mut p, &mut click_intercepted) {
+            state.image.layers.push(Layer::new(Rect::new(0, 0, state.image.width, state.image.height)));
+            state.active_layer_idx = state.image.layers.len() - 1;
+            layer_selector.refresh(&state.image, state.active_layer_idx);
+        }
 
         state.selected_color = color_selector.update(&mut p, &mut click_intercepted);
         state.selected_tool = tool_selector.update(&mut p, &mut click_intercepted);
+        if let Some(idx) = layer_selector.update(&mut p, &mut click_intercepted) {
+            state.active_layer_idx = idx;
+            layer_selector.refresh(&state.image, state.active_layer_idx);
+        }
 
         if p.key_down(Key::Q) {
+            // TODO ask the user if they really want to quit, and/or save a recovery file
             break 'running;
         }
 
@@ -242,6 +264,10 @@ fn main() {
             state.canvas_offset_baseline_y = p.mouse_y as i32;
         }
 
+        if (p.mouse_left_released && state.currently_drawing) {
+            history.take_snapshot(&state.image);
+        }
+
         if (p.mouse_left_pressed && !click_intercepted) || state.currently_drawing {
             state.currently_drawing = true;
             let color = state.selected_color;
@@ -253,8 +279,8 @@ fn main() {
             match state.selected_tool.as_str() {
                 "Pencil" => state.active_layer().draw_line(old_x, old_y, x, y, color),
                 "Paintbrush" => {
-                    for dx in -10..=10 {
-                        for dy in -10..=10 {
+                    for dx in -state.brush_size / 2..=state.brush_size / 2 {
+                        for dy in -state.brush_size / 2..=state.brush_size / 2 {
                             if (dx as f64 * dx as f64 + dy as f64 * dy as f64).sqrt() < 10.0 {
                                 state.active_layer().draw_line(old_x + dx, old_y + dy, x + dx, y + dy, color);
                             }
@@ -271,11 +297,20 @@ fn main() {
                     state.active_layer().fill(x, y, color);
                 }
                 "Spray Can" => {
-                    for _ in 0..10 {
-                        let dx = rand::random::<i32>() % 100 - 50;
-                        let dy = rand::random::<i32>() % 100 - 50;
-                        if (dx as f64 * dx as f64 + dy as f64 * dy as f64).sqrt() < 50.0 {
+                    for _ in 0..100 {
+                        let dx = rand::random::<i32>() % state.brush_size - (state.brush_size / 2);
+                        let dy = rand::random::<i32>() % state.brush_size - (state.brush_size / 2);
+                        if (dx as f64 * dx as f64 + dy as f64 * dy as f64).sqrt() < (state.brush_size as f64 / 2.0) {
                             state.active_layer().draw_pixel(x + dx, y + dy, color);
+                        }
+                    }
+                }
+                "Eraser" => {
+                    for dx in -state.brush_size / 2..=state.brush_size / 2 {
+                        for dy in -state.brush_size / 2..=state.brush_size / 2 {
+                            if (dx as f64 * dx as f64 + dy as f64 * dy as f64).sqrt() < 10.0 {
+                                state.active_layer().draw_line(old_x + dx, old_y + dy, x + dx, y + dy, Color::new(0, 0, 0, 0));
+                            }
                         }
                     }
                 }
@@ -302,9 +337,6 @@ fn main() {
         let scroll_y = p.get_scroll_delta_y();
         state.canvas_scale *= (10.0 + scroll_y as f64) / 10.0;
 
-        print!("state={:?}, ", t.elapsed());
-        t = Instant::now();
-
         p.clear(Color::new(50, 50, 50, 255));
         let rect = Rect::new(0, 0, state.image.width, state.image.height);
         let src_rect = rect;
@@ -314,31 +346,24 @@ fn main() {
             (rect.width as f64 * state.canvas_scale) as u32,
             (rect.height as f64 * state.canvas_scale) as u32,
         );
-        print!("draw1={:?}, ", t.elapsed());
-        t = Instant::now();
         let mut blended = state.image.blend();
-        print!("blend={:?}, ", t.elapsed());
-        t = Instant::now();
         p.draw_texture(&mut blended.data, src_rect, dest_rect);
         save_button.draw(&mut p);
         new_button.draw(&mut p);
         open_button.draw(&mut p);
+        undo_button.draw(&mut p);
+        redo_button.draw(&mut p);
+        new_layer_button.draw(&mut p);
         color_selector.draw(&mut p);
         tool_selector.draw(&mut p);
+        layer_selector.draw(&mut p);
         p.draw_text(&state.error_text, 5, p.screen_height - 30, 20.0, Color::new(255, 0, 0, 255));
         if state.showing_new_dialog {
             new_dialog.draw(&mut p);
         }
         confirm_overwrite_dialog.draw(&mut p);
 
-        print!("draw2={:?}, ", t.elapsed());
-        t = Instant::now();
-
         p.present();
-
-        println!("present={:?}", t.elapsed());
-        t = Instant::now();
-
 
         std::thread::sleep(Duration::from_millis(1));
     }

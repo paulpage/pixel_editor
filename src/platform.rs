@@ -5,7 +5,7 @@ use sdl2::event::{Event, WindowEvent};
 use sdl2::mouse::MouseButton;
 use sdl2::keyboard::Keycode;
 use sdl2::surface::Surface;
-use sdl2::render::{WindowCanvas, TextureCreator};
+use sdl2::render::WindowCanvas;
 use sdl2::{EventPump, Sdl, VideoSubsystem};
 use sdl2::keyboard::Mod;
 use rusttype::{point, Scale, PositionedGlyph, Font};
@@ -68,6 +68,7 @@ impl Platform {
                 screen_width as u32,
                 screen_height as u32)
             .position_centered()
+            .resizable()
             .build()
             .map_err(|e| e.to_string())?;
 
@@ -153,7 +154,13 @@ impl Platform {
                     self.shift_down = keymod.contains(Mod::LSHIFTMOD) || keymod.contains(Mod::RSHIFTMOD);
                     self.super_down = keymod.contains(Mod::LGUIMOD) || keymod.contains(Mod::RGUIMOD);
                 }
-                Event::MouseButtonDown { mouse_btn, .. } => {
+                Event::MouseButtonDown { mouse_btn, x, y, .. } => {
+                    // We need to set these separately from the mouse motion event to handle deltas
+                    // properly on touchscreens
+                    self.mouse_x = x;
+                    self.mouse_y = y;
+                    self.mouse_delta_x = 0;
+                    self.mouse_delta_y = 0;
                     match mouse_btn {
                         MouseButton::Left => {
                             self.mouse_left_down = true;
@@ -184,9 +191,13 @@ impl Platform {
                             self.mouse_right_down = false;
                             self.mouse_right_released = true;
                         }
-                        _ => {}
+                        _ => {println!("{:?}", mouse_btn);}
                     }
                 }
+                // Event::FingerUp { .. } => {
+                //     self.mouse_left_down = false;
+                //     self.mouse_left_released = true;
+                // }
                 Event::MouseMotion { x, y, .. } => {
                     self.mouse_delta_x = self.mouse_delta_x + x - self.mouse_x;
                     self.mouse_delta_y = self.mouse_delta_y + y - self.mouse_y;
@@ -212,12 +223,12 @@ impl Platform {
     pub fn get_scroll_delta_x(&mut self) -> i32 {
         let delta = self.scroll_delta_x;
         self.scroll_delta_x = 0;
-        return delta;
+        delta
     }
     pub fn get_scroll_delta_y(&mut self) -> i32 {
         let delta = self.scroll_delta_y;
         self.scroll_delta_y = 0;
-        return delta;
+        delta
     }
     pub fn key_down(&self, key: Keycode) -> bool {
         self.keys_down.contains(&key)
@@ -230,6 +241,8 @@ impl Platform {
     }
 
     pub fn text_entered(&self) -> String {
+        // TODO this would probably be a better fit for SDLs text entry event, I'll just have to
+        // make sure we still handle keyboard shortcuts properly
         let mut s = String::new();
         for key in &self.keys_pressed {
             let new_char = match key {
@@ -291,7 +304,7 @@ impl Platform {
                 Keycode::KpDivide => "/",
                 Keycode::Equals => "=",
                 // Keycode::Grave => if self.shift_down { "~" } else { "`" },
-                Keycode::LeftBracket => if self.shift_down { "" } else { "" },
+                Keycode::LeftBracket => if self.shift_down { "{" } else { "[" },
                 Keycode::Minus => if self.shift_down { "_" } else { "-" },
                 Keycode::KpMultiply => "*",
                 Keycode::KpComma => ",",
@@ -314,6 +327,7 @@ impl Platform {
         let color = SdlColor::RGBA(color.r, color.g, color.b, color.a);
         if self.draw_color != color {
             self.canvas.set_draw_color(color);
+            self.draw_color = color;
         }
         self.canvas.clear();
     }
@@ -327,8 +341,9 @@ impl Platform {
         let color = SdlColor::RGBA(color.r, color.g, color.b, color.a);
         if self.draw_color != color {
             self.canvas.set_draw_color(color);
+            self.draw_color = color;
         }
-        self.canvas.fill_rect(rect);
+        self.canvas.fill_rect(rect).unwrap();
     }
 
     pub fn draw_texture(&mut self, buffer: &mut [u8], src_rect: Rect, dest_rect: Rect) {
@@ -339,7 +354,7 @@ impl Platform {
         let creator = self.canvas.texture_creator();
         let texture = creator.create_texture_from_surface(&surface).unwrap();
         let dest_rect = SdlRect::new(dest_rect.x, dest_rect.y, dest_rect.width, dest_rect.height);
-        self.canvas.copy(&texture, None, Some(dest_rect));
+        self.canvas.copy(&texture, None, Some(dest_rect)).unwrap();
     }
 
     pub fn layout_text(&mut self, text: &str, scale: f32) -> (Vec<PositionedGlyph<'_>>, usize, usize) {
@@ -362,7 +377,7 @@ impl Platform {
 
     pub fn draw_text(&mut self, text: &str, x: i32, y: i32, scale: f32, color: Color) -> Rect {
         // Save the original parameters to return in the rect
-        if text.len() == 0 {
+        if text.is_empty() {
             return Rect::new(x, y, 0, 0);
         }
 
