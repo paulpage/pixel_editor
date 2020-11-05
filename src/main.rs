@@ -16,15 +16,10 @@ use gui::{Widget, Button, ColorSelector, ToolSelector, NewDialog, ConfirmationDi
 mod platform;
 use platform::{Platform, PlatformMessage};
 
-// TODO If you draw with the touchscreen, there will be lines connecting your separate drawings.
-// This is not because the up and down events aren't registered, but because the mouse position
-// isn't being updated (how could it? the computer can't see your finger moving if it's not on the
-// screen). So we'll either have to see if we can update the position right away when the finger
-// goes down or add finger tracking to the platform layer so we can handle that properly.
-
 struct State {
     image: Image,
     active_layer_idx: usize,
+    history: ImageHistory,
     canvas: Rect,
     canvas_scale: f64,
     canvas_offset_x: i32,
@@ -38,14 +33,23 @@ struct State {
     // TODO better way to handle dialog boxes please
     showing_new_dialog: bool,
     error_text: String,
+    cached_blended_layer: Layer,
+    dirty_region: Rect,
+}
+
+struct ButtonAction<T> {
+    button: Button,
+    action: Box<dyn Fn(&mut T)>,
 }
 
 impl State {
     fn new() -> Self {
+        let (width, height) = (800, 600);
         Self {
-            image: Image::new(800, 600),
+            image: Image::new(width, height),
             active_layer_idx: 0,
-            canvas: Rect::new(100, 100, 800, 600),
+            history: ImageHistory::new(),
+            canvas: Rect::new(100, 100, width, height),
             canvas_scale: 1.0,
             canvas_offset_x: 0,
             canvas_offset_y: 0,
@@ -57,6 +61,8 @@ impl State {
             currently_drawing: false,
             showing_new_dialog: false,
             error_text: "".into(),
+            cached_blended_layer: Layer::new(Rect::new(0, 0, width, height)),
+            dirty_region: Rect::new(0, 0, width, height),
         }
     }
     
@@ -83,6 +89,7 @@ impl State {
 
 fn main() {
     let mut p = Platform::new().unwrap();
+    let mut state = State::new();
 
     let mut save_button = Button::new(Rect::new(5, 5, 100, 30), "Save".into());
     let mut new_button = Button::new(Rect::new(110, 5, 100, 30), "New".into());
@@ -152,18 +159,20 @@ fn main() {
     );
     confirm_overwrite_dialog.showing = false;
 
-    let mut state = State::new();
-    let mut history = ImageHistory::new();
-
     // TODO do we want to make the background a pattern (like white or checkers) instead of or in
     // addition to making the first layer solid white?
     state.image.layers[0].fill(0, 0, Color::WHITE);
-    history.take_snapshot(&state.image);
+    state.history.take_snapshot(&state.image);
     layer_selector.refresh(&state.image, state.active_layer_idx);
 
     'running: loop {
         if let PlatformMessage::Quit = p.process_events() {
+            // TODO prompt to save image
             break 'running;
+        }
+
+        if p.screen_size_changed {
+            state.center_canvas(p.screen_width, p.screen_height);
         }
 
         let mut click_intercepted = false;
@@ -227,10 +236,10 @@ fn main() {
             }
         }
         if undo_button.update(&mut p, &mut click_intercepted) {
-            state.image = history.undo(state.image);
+            state.image = state.history.undo(state.image);
         }
         if redo_button.update(&mut p, &mut click_intercepted) {
-            state.image = history.redo(state.image);
+            state.image = state.history.redo(state.image);
         }
         if new_layer_button.update(&mut p, &mut click_intercepted) {
             state.image.layers.push(Layer::new(Rect::new(0, 0, state.image.width, state.image.height)));
@@ -264,8 +273,8 @@ fn main() {
             state.canvas_offset_baseline_y = p.mouse_y as i32;
         }
 
-        if (p.mouse_left_released && state.currently_drawing) {
-            history.take_snapshot(&state.image);
+        if p.mouse_left_released && state.currently_drawing {
+            state.history.take_snapshot(&state.image);
         }
 
         if (p.mouse_left_pressed && !click_intercepted) || state.currently_drawing {
@@ -346,8 +355,10 @@ fn main() {
             (rect.width as f64 * state.canvas_scale) as u32,
             (rect.height as f64 * state.canvas_scale) as u32,
         );
-        let mut blended = state.image.blend();
-        p.draw_texture(&mut blended.data, src_rect, dest_rect);
+        let mut dirty_blended = state.image.blend(state.dirty_region);
+        state.cached_blended_layer.blend(&dirty_blended);
+        state.dirty_region = Rect::new(0, 0, 100, 100); // TODO correctly determine dirty region by putting this in tool uses
+        p.draw_texture(&mut state.cached_blended_layer.data, src_rect, dest_rect);
         save_button.draw(&mut p);
         new_button.draw(&mut p);
         open_button.draw(&mut p);

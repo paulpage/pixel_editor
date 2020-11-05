@@ -28,6 +28,7 @@ pub struct Platform {
 
     pub screen_width: i32,
     pub screen_height: i32,
+    pub screen_size_changed: bool,
 
     pub mouse_left_down: bool,
     pub mouse_right_down: bool,
@@ -93,6 +94,7 @@ impl Platform {
 
             screen_width,
             screen_height,
+            screen_size_changed: false,
 
             mouse_left_down: false,
             mouse_right_down: false,
@@ -121,6 +123,7 @@ impl Platform {
 
     pub fn process_events(&mut self) -> PlatformMessage {
 
+        self.screen_size_changed = false;
         self.mouse_left_pressed = false;
         self.mouse_left_released = false;
         self.mouse_right_pressed = false;
@@ -210,6 +213,7 @@ impl Platform {
                 }
                 Event::Window { win_event, .. } => {
                     if let WindowEvent::Resized(w, h) = win_event {
+                        self.screen_size_changed = true;
                         self.screen_width = w;
                         self.screen_height = h;
                     }

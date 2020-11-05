@@ -173,15 +173,11 @@ impl Layer {
                     }
                     if other.data[oi + 3] == 255 {
                         let i = (y * self.rect.width as i32 + x) as usize * 4;
-                        self.data[i] = 255;
-                        self.data[i + 1] = 255;
-                        self.data[i + 2] = 255;
-                        self.data[i + 3] = 255;
                         // self.data[i] = other.data[oi];
-                        // self.data[i] = other.data[oi];
-                        // self.data[i + 1] = other.data[oi + 1];
-                        // self.data[i + 2] = other.data[oi + 2];
-                        // self.data[i + 3] = other.data[oi + 3];
+                        self.data[i] = other.data[oi];
+                        self.data[i + 1] = other.data[oi + 1];
+                        self.data[i + 2] = other.data[oi + 2];
+                        self.data[i + 3] = other.data[oi + 3];
                         continue;
                     }
 
@@ -247,14 +243,14 @@ impl Image {
         // TODO
     }
 
-    pub fn blend(&self) -> Layer {
+    pub fn blend(&self, rect: Rect) -> Layer {
         let mut base = Layer::new(Rect::new(0, 0, self.width, self.height));
         for layer in self.layers.iter().rev() {
             let width = min(layer.rect.width as i32, base.rect.width as i32 - layer.rect.x);
             let height = min(layer.rect.height as i32, base.rect.height as i32 - layer.rect.y);
             if base.rect.width >= layer.rect.width && base.rect.height >= layer.rect.height {
-                for y in max(0, layer.rect.y)..layer.rect.y + height {
-                    for x in max(0, layer.rect.x)..min(base.rect.width as i32, layer.rect.x + width) {
+                for y in max(rect.y, layer.rect.y)..layer.rect.y + height {
+                    for x in max(rect.x, layer.rect.x)..min(base.rect.width as i32, layer.rect.x + width) {
 
                         let i = (y * base.rect.width as i32 + x) as usize * 4;
                         if base.data[i + 3] == 255 {
@@ -300,7 +296,7 @@ impl Image {
     }
 
     pub fn save(&self, path: &Path) -> Result<(), ()> {
-        let blended = self.blend();
+        let blended = self.blend(Rect::new(0, 0, self.width, self.height));
         // TODO
         Err(())
         // match blended.data.save(path) {
