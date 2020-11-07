@@ -1,5 +1,6 @@
 use sdl2::keyboard::Keycode as Key;
 use std::path::Path;
+use std::cmp::{min, max};
 use nfd::Response as FileDialogResponse;
 
 use std::time::{Instant, Duration};
@@ -20,6 +21,11 @@ macro_rules! active_layer {
     ($state:expr) => {
         $state.image.layers[$state.active_layer_idx]
     }
+}
+
+enum FillMode {
+    Fill,
+    Outline,
 }
 
 struct State {
@@ -44,6 +50,7 @@ struct State {
     dirty_region: Rect,
     last_mousedown_x: i32,
     last_mousedown_y: i32,
+    fill_mode: FillMode,
 }
 
 struct ButtonAction<T> {
@@ -75,6 +82,7 @@ impl State {
             dirty_region: Rect::new(0, 0, width, height),
             last_mousedown_x: 0,
             last_mousedown_y: 0,
+            fill_mode: FillMode::Fill,
         }
     }
     
@@ -294,6 +302,7 @@ fn main() {
             };
             state.history.take_snapshot(&state.image);
             active_layer!(state).blend(&state.temp_layer);
+            state.temp_layer.clear();
         }
 
         if (p.mouse_left_pressed && !click_intercepted) || state.currently_drawing {
@@ -352,6 +361,21 @@ fn main() {
                     state.temp_layer.draw_line(state.last_mousedown_x, state.last_mousedown_y, x, y, color);
                 }
                 "Rectangle" => {
+                    state.temp_layer.clear();
+
+                    let x1 = min(state.last_mousedown_x, x);
+                    let x2 = max(state.last_mousedown_x, x);
+                    let y1 = min(state.last_mousedown_y, y);
+                    let y2 = max(state.last_mousedown_y, y);
+                    match state.fill_mode {
+                        FillMode::Fill => {
+                            for i in y1..y2 {
+                                state.temp_layer.draw_line(x1, i, x2, i, color);
+                            }
+                        }
+                        FillMode::Outline => {
+                        }
+                    }
                 }
                 _ => {}
             }
