@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-// use image::RgbaImage;
+use image::{self, RgbaImage};
 use image::error::ImageError;
 use super::util::{Rect, Color};
 use std::path::Path;
@@ -173,7 +173,6 @@ impl Layer {
                     }
                     if other.data[oi + 3] == 255 {
                         let i = (y * self.rect.width as i32 + x) as usize * 4;
-                        // self.data[i] = other.data[oi];
                         self.data[i] = other.data[oi];
                         self.data[i + 1] = other.data[oi + 1];
                         self.data[i + 2] = other.data[oi + 2];
@@ -302,10 +301,10 @@ impl Image {
     pub fn save(&self, path: &Path) -> Result<(), ()> {
         let blended = self.blend(Rect::new(0, 0, self.width, self.height));
         // TODO
-        Err(())
-        // match blended.data.save(path) {
-        //     Ok(()) => Ok(()),
-        //     Err(_) => Err(()),
-        // }
+        let img = RgbaImage::from_raw(blended.rect.width, blended.rect.height, blended.data).unwrap();
+        match img.save(path) {
+            Ok(()) => Ok(()),
+            Err(_) => Err(()),
+        }
     }
 }

@@ -82,7 +82,7 @@ impl State {
             dirty_region: Rect::new(0, 0, width, height),
             last_mousedown_x: 0,
             last_mousedown_y: 0,
-            fill_mode: FillMode::Fill,
+            fill_mode: FillMode::Outline,
         }
     }
     
@@ -295,16 +295,6 @@ fn main() {
             state.canvas_offset_baseline_y = p.mouse_y as i32;
         }
 
-        if p.mouse_left_released && state.currently_drawing {
-            struct MutParts<'a> {
-                base_layer: &'a mut Layer,
-                temp_layer: &'a mut Layer,
-            };
-            state.history.take_snapshot(&state.image);
-            active_layer!(state).blend(&state.temp_layer);
-            state.temp_layer.clear();
-        }
-
         if (p.mouse_left_pressed && !click_intercepted) || state.currently_drawing {
             state.currently_drawing = true;
             let color = state.selected_color;
@@ -374,11 +364,25 @@ fn main() {
                             }
                         }
                         FillMode::Outline => {
+                            for i in 0..state.brush_size {
+                                if x2 - i > x1 && y2 - i > y1 {
+                                    state.temp_layer.draw_line(x1 + i, y1 + i, x2 - i, y1 + i, color);
+                                    state.temp_layer.draw_line(x1 + i, y2 - i, x2 - i, y2 - i, color);
+                                    state.temp_layer.draw_line(x1 + i, y1 + i, x1 + i, y2 - i, color);
+                                    state.temp_layer.draw_line(x2 - i, y1 + i, x2 - i, y2 - i, color);
+                                }
+                            }
                         }
                     }
                 }
                 _ => {}
             }
+        }
+
+        if p.mouse_left_released && state.currently_drawing {
+            active_layer!(state).blend(&state.temp_layer);
+            state.history.take_snapshot(&state.image);
+            state.temp_layer.clear();
         }
 
         if state.showing_new_dialog {
@@ -388,6 +392,12 @@ fn main() {
                 state.image = image;
                 state.active_layer_idx = 0;
                 state.showing_new_dialog = false;
+                state.history = ImageHistory::new();
+                state.canvas = Rect::new(state.canvas.x, state.canvas.y, layer.rect.width, layer.rect.height);
+                state.cached_blended_layer = Layer::new(Rect::new(0, 0, layer.rect.width, layer.rect.height));
+                state.dirty_region = Rect::new(0, 0, layer.rect.width, layer.rect.height);
+                state.temp_layer = Layer::new(Rect::new(0, 0, layer.rect.width, layer.rect.height));
+                active_layer!(state).fill(0, 0, Color::WHITE);
             }
         }
 
