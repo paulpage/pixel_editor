@@ -201,6 +201,10 @@ impl Layer {
         }
         false
     }
+
+    pub fn clear(&mut self) {
+        self.data.iter_mut().map(|i| *i = 0).count();
+    }
 }
 
 impl Image {

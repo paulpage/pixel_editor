@@ -16,9 +16,16 @@ use gui::{Widget, Button, ColorSelector, ToolSelector, NewDialog, ConfirmationDi
 mod platform;
 use platform::{Platform, PlatformMessage};
 
+macro_rules! active_layer {
+    ($state:expr) => {
+        $state.image.layers[$state.active_layer_idx]
+    }
+}
+
 struct State {
     image: Image,
     active_layer_idx: usize,
+    temp_layer: Layer,
     history: ImageHistory,
     canvas: Rect,
     canvas_scale: f64,
@@ -35,6 +42,8 @@ struct State {
     error_text: String,
     cached_blended_layer: Layer,
     dirty_region: Rect,
+    last_mousedown_x: i32,
+    last_mousedown_y: i32,
 }
 
 struct ButtonAction<T> {
@@ -48,6 +57,7 @@ impl State {
         Self {
             image: Image::new(width, height),
             active_layer_idx: 0,
+            temp_layer: Layer::new(Rect::new(0, 0, width, height)),
             history: ImageHistory::new(),
             canvas: Rect::new(100, 100, width, height),
             canvas_scale: 1.0,
@@ -63,6 +73,8 @@ impl State {
             error_text: "".into(),
             cached_blended_layer: Layer::new(Rect::new(0, 0, width, height)),
             dirty_region: Rect::new(0, 0, width, height),
+            last_mousedown_x: 0,
+            last_mousedown_y: 0,
         }
     }
     
@@ -140,6 +152,8 @@ fn main() {
             "Paint Bucket".into(),
             "Spray Can".into(),
             "Eraser".into(),
+            "Line".into(),
+            "Rectangle".into(),
         ],
     );
     let mut layer_selector = LayerSelector::new(Rect::new(300, 300, 300, 300));
@@ -274,7 +288,12 @@ fn main() {
         }
 
         if p.mouse_left_released && state.currently_drawing {
+            struct MutParts<'a> {
+                base_layer: &'a mut Layer,
+                temp_layer: &'a mut Layer,
+            };
             state.history.take_snapshot(&state.image);
+            active_layer!(state).blend(&state.temp_layer);
         }
 
         if (p.mouse_left_pressed && !click_intercepted) || state.currently_drawing {
@@ -285,32 +304,37 @@ fn main() {
             let old_x = x - (p.mouse_delta_x as f64 / state.canvas_scale) as i32;
             let old_y = y - (p.mouse_delta_y as f64 / state.canvas_scale) as i32;
 
+            if p.mouse_left_pressed {
+                state.last_mousedown_x = x;
+                state.last_mousedown_y = y;
+            }
+
             match state.selected_tool.as_str() {
-                "Pencil" => state.active_layer().draw_line(old_x, old_y, x, y, color),
+                "Pencil" => active_layer!(state).draw_line(old_x, old_y, x, y, color),
                 "Paintbrush" => {
                     for dx in -state.brush_size / 2..=state.brush_size / 2 {
                         for dy in -state.brush_size / 2..=state.brush_size / 2 {
                             if (dx as f64 * dx as f64 + dy as f64 * dy as f64).sqrt() < 10.0 {
-                                state.active_layer().draw_line(old_x + dx, old_y + dy, x + dx, y + dy, color);
+                                active_layer!(state).draw_line(old_x + dx, old_y + dy, x + dx, y + dy, color);
                             }
                         }
                     }
                 }
                 "Color Picker" => {
-                    if let Some(color) = state.active_layer().get_pixel(x, y) {
+                    if let Some(color) = active_layer!(state).get_pixel(x, y) {
                         state.selected_color = color;
                         color_selector.set_selected_color(color);
                     }
                 }
                 "Paint Bucket" => {
-                    state.active_layer().fill(x, y, color);
+                    active_layer!(state).fill(x, y, color);
                 }
                 "Spray Can" => {
                     for _ in 0..100 {
                         let dx = rand::random::<i32>() % state.brush_size - (state.brush_size / 2);
                         let dy = rand::random::<i32>() % state.brush_size - (state.brush_size / 2);
                         if (dx as f64 * dx as f64 + dy as f64 * dy as f64).sqrt() < (state.brush_size as f64 / 2.0) {
-                            state.active_layer().draw_pixel(x + dx, y + dy, color);
+                            active_layer!(state).draw_pixel(x + dx, y + dy, color);
                         }
                     }
                 }
@@ -318,10 +342,16 @@ fn main() {
                     for dx in -state.brush_size / 2..=state.brush_size / 2 {
                         for dy in -state.brush_size / 2..=state.brush_size / 2 {
                             if (dx as f64 * dx as f64 + dy as f64 * dy as f64).sqrt() < 10.0 {
-                                state.active_layer().draw_line(old_x + dx, old_y + dy, x + dx, y + dy, Color::new(0, 0, 0, 0));
+                                active_layer!(state).draw_line(old_x + dx, old_y + dy, x + dx, y + dy, Color::new(0, 0, 0, 0));
                             }
                         }
                     }
+                }
+                "Line" => {
+                    state.temp_layer.clear();
+                    state.temp_layer.draw_line(state.last_mousedown_x, state.last_mousedown_y, x, y, color);
+                }
+                "Rectangle" => {
                 }
                 _ => {}
             }
@@ -357,6 +387,7 @@ fn main() {
         );
         let mut dirty_blended = state.image.blend(state.dirty_region);
         state.cached_blended_layer.blend(&dirty_blended);
+        state.cached_blended_layer.blend(&state.temp_layer);
         state.dirty_region = Rect::new(0, 0, 100, 100); // TODO correctly determine dirty region by putting this in tool uses
         p.draw_texture(&mut state.cached_blended_layer.data, src_rect, dest_rect);
         save_button.draw(&mut p);
