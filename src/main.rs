@@ -164,7 +164,7 @@ fn main() {
             "Rectangle".into(),
         ],
     );
-    let mut layer_selector = LayerSelector::new(Rect::new(300, 300, 300, 300));
+    let mut layer_selector = LayerSelector::new(Rect::new(400, 400, 200, 200));
 
     let mut new_dialog = NewDialog::new(500, 500, 800, 600);
 
@@ -188,6 +188,7 @@ fn main() {
     layer_selector.refresh(&state.image, state.active_layer_idx);
 
     'running: loop {
+
         if let PlatformMessage::Quit = p.process_events() {
             // TODO prompt to save image
             break 'running;
@@ -308,6 +309,13 @@ fn main() {
                 state.last_mousedown_y = y;
             }
 
+            state.dirty_region = Rect {
+                x: min(x, old_x) - state.brush_size - 1,
+                y: min(y, old_y) - state.brush_size - 1,
+                width: (x - old_x).abs() as u32 + state.brush_size as u32 * 2 + 2,
+                height: (y - old_y).abs() as u32 + state.brush_size as u32 * 2 + 2,
+            };
+
             match state.selected_tool.as_str() {
                 "Pencil" => active_layer!(state).draw_line(old_x, old_y, x, y, color),
                 "Paintbrush" => {
@@ -324,9 +332,11 @@ fn main() {
                         state.selected_color = color;
                         color_selector.set_selected_color(color);
                     }
+                    state.dirty_region = Rect::new(0, 0, 0, 0);
                 }
                 "Paint Bucket" => {
                     active_layer!(state).fill(x, y, color);
+                    state.dirty_region = Rect::new(0, 0, state.canvas.width, state.canvas.height);
                 }
                 "Spray Can" => {
                     for _ in 0..100 {
@@ -349,6 +359,13 @@ fn main() {
                 "Line" => {
                     state.temp_layer.clear();
                     state.temp_layer.draw_line(state.last_mousedown_x, state.last_mousedown_y, x, y, color);
+                    state.dirty_region = Rect::new(0, 0, state.canvas.width, state.canvas.height);
+                    // state.dirty_region = Rect {
+                    //     x: min(x, state.last_mousedown_x) - state.brush_size - 1,
+                    //     y: min(y, state.last_mousedown_y) - state.brush_size - 1,
+                    //     width: (x - state.last_mousedown_x).abs() as u32 + state.brush_size as u32 * 2 + 2,
+                    //     height: (y - state.last_mousedown_y).abs() as u32 + state.brush_size as u32 * 2 + 2,
+                    // };
                 }
                 "Rectangle" => {
                     state.temp_layer.clear();
@@ -374,6 +391,7 @@ fn main() {
                             }
                         }
                     }
+                    state.dirty_region = Rect::new(0, 0, state.canvas.width, state.canvas.height);
                 }
                 _ => {}
             }
@@ -383,6 +401,7 @@ fn main() {
             active_layer!(state).blend(&state.temp_layer);
             state.history.take_snapshot(&state.image);
             state.temp_layer.clear();
+            state.dirty_region = Rect::new(0, 0, 0, 0);
         }
 
         if state.showing_new_dialog {
@@ -410,6 +429,7 @@ fn main() {
         let scroll_y = p.get_scroll_delta_y();
         state.canvas_scale *= (10.0 + scroll_y as f64) / 10.0;
 
+        let t = Instant::now();
         p.clear(Color::new(50, 50, 50, 255));
         let rect = Rect::new(0, 0, state.image.width, state.image.height);
         let src_rect = rect;
@@ -419,10 +439,11 @@ fn main() {
             (rect.width as f64 * state.canvas_scale) as u32,
             (rect.height as f64 * state.canvas_scale) as u32,
         );
-        let mut dirty_blended = state.image.blend(state.dirty_region);
-        state.cached_blended_layer.blend(&dirty_blended);
-        state.cached_blended_layer.blend(&state.temp_layer);
-        state.dirty_region = Rect::new(0, 0, 100, 100); // TODO correctly determine dirty region by putting this in tool uses
+        if state.dirty_region.width > 0 && state.dirty_region.height > 0 {
+            let mut dirty_blended = state.image.blend(state.dirty_region);
+            state.cached_blended_layer.blend(&dirty_blended);
+            state.cached_blended_layer.blend(&state.temp_layer);
+        }
         p.draw_texture(&mut state.cached_blended_layer.data, src_rect, dest_rect);
         save_button.draw(&mut p);
         new_button.draw(&mut p);
@@ -440,6 +461,8 @@ fn main() {
         confirm_overwrite_dialog.draw(&mut p);
 
         p.present();
+
+        state.dirty_region = Rect::new(0, 0, 0, 0);
 
         std::thread::sleep(Duration::from_millis(1));
     }

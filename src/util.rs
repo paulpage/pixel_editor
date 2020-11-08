@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+use std::cmp::{min, max};
+
 pub struct Point {
     pub x: i32,
     pub y: i32,
@@ -34,6 +36,21 @@ impl Rect {
 
     pub fn contains_point(&self, x: i32, y: i32) -> bool {
         x >= self.x && x < self.x + self.width as i32 && y >= self.y && y < self.y + self.height as i32
+    }
+
+    pub fn overlap(&self, other: Rect) -> Rect {
+        let left = max(self.x, other.x);
+        let right = min(self.x + self.width as i32, other.x + other.width as i32);
+        let top = max(self.y, other.y);
+        let bottom = min(self.y + self.height as i32, other.y + other.height as i32);
+        let width = max(right - left, 0) as u32;
+        let height = max(bottom - top, 0) as u32;
+        Rect {
+            x: left,
+            y: top,
+            width,
+            height,
+        }
     }
 }
 
@@ -80,6 +97,12 @@ impl Color {
         r: 150,
         g: 150,
         b: 150,
+        a: 255,
+    };
+    pub const GREEN: Self = Self {
+        r: 0,
+        g: 255,
+        b: 0,
         a: 255,
     };
 

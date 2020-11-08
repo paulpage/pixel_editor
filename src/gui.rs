@@ -205,6 +205,7 @@ impl Button {
     }
 }
 
+#[derive(PartialEq)]
 enum ButtonState {
     Released,
     Hovered,
@@ -225,7 +226,7 @@ impl Widget<bool> for Button {
     fn update(&mut self, p: &mut Platform, mouse_intercepted: &mut bool) -> bool {
         *mouse_intercepted = self.rect.contains_point(p.mouse_x as i32, p.mouse_y as i32) && p.mouse_left_down || *mouse_intercepted;
         if self.rect.contains_point(p.mouse_x as i32, p.mouse_y as i32) {
-            if p.mouse_left_down {
+            if p.mouse_left_down && (p.mouse_left_pressed || self.state == ButtonState::Pressed) {
                 self.state = ButtonState::Pressed;
             } else {
                 self.state = ButtonState::Hovered;

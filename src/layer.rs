@@ -252,8 +252,17 @@ impl Image {
             let width = min(layer.rect.width as i32, base.rect.width as i32 - layer.rect.x);
             let height = min(layer.rect.height as i32, base.rect.height as i32 - layer.rect.y);
             if base.rect.width >= layer.rect.width && base.rect.height >= layer.rect.height {
-                for y in max(rect.y, layer.rect.y)..layer.rect.y + height {
-                    for x in max(rect.x, layer.rect.x)..min(base.rect.width as i32, layer.rect.x + width) {
+
+                let draw_rect = rect.overlap(layer.rect);
+                for y in draw_rect.y..(draw_rect.y + draw_rect.height as i32) {
+                    for x in draw_rect.x..(draw_rect.x + draw_rect.width as i32) {
+
+//                 for y in max(rect.y, layer.rect.y)..layer.rect.y + height {
+//                     for x in max(rect.x, layer.rect.x)..min(base.rect.width as i32, layer.rect.x + width) {
+
+                        if !rect.contains_point(x, y) {
+                            continue;
+                        }
 
                         let i = (y * base.rect.width as i32 + x) as usize * 4;
                         if base.data[i + 3] == 255 {

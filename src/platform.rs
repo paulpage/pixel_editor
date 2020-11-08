@@ -341,13 +341,15 @@ impl Platform {
     }
 
     pub fn draw_rect(&mut self, rect: Rect, color: Color) {
-        let rect = SdlRect::new(rect.x, rect.y, rect.width, rect.height);
-        let color = SdlColor::RGBA(color.r, color.g, color.b, color.a);
-        if self.draw_color != color {
-            self.canvas.set_draw_color(color);
-            self.draw_color = color;
+        if rect.width > 0 && rect.height > 0 {
+            let rect = SdlRect::new(rect.x, rect.y, rect.width, rect.height);
+            let color = SdlColor::RGBA(color.r, color.g, color.b, color.a);
+            if self.draw_color != color {
+                self.canvas.set_draw_color(color);
+                self.draw_color = color;
+            }
+            self.canvas.fill_rect(rect).unwrap();
         }
-        self.canvas.fill_rect(rect).unwrap();
     }
 
     pub fn draw_texture(&mut self, buffer: &mut [u8], src_rect: Rect, dest_rect: Rect) {
