@@ -67,7 +67,7 @@ pub struct ConfirmationDialog {
     message: String,
     buttons: Vec<Button>,
     rect: Rect,
-    pub showing: bool,
+    showing: bool,
 }
 
 impl ConfirmationDialog {
@@ -89,6 +89,10 @@ impl ConfirmationDialog {
             showing: false,
         }
     }
+
+    pub fn show(&mut self) {
+        self.showing = true;
+    }
 }
 
 impl Widget<Option<String>> for ConfirmationDialog {
@@ -107,7 +111,7 @@ impl Widget<Option<String>> for ConfirmationDialog {
             // *mouse_intercepted = self.rect.contains_point(p.mouse_x as i32, p.mouse_y as i32) && p.mouse_left_down || *mouse_intercepted;
             for button in &mut self.buttons {
                 if button.update(p, mouse_intercepted) {
-                    println!("yah");
+                    self.showing = false;
                     return Some(button.text.clone());
                 }
             }
@@ -122,7 +126,7 @@ pub struct NewDialog {
     ok_button: Button,
     cancel_button: Button,
     rect: Rect,
-    pub should_close: bool,
+    showing: bool,
 }
 
 impl NewDialog {
@@ -133,43 +137,50 @@ impl NewDialog {
             ok_button: Button::new(Rect::new(x + 5, y + 70, 100, 30), "Ok".into()),
             cancel_button: Button::new(Rect::new(x + 110, y + 70, 100, 30), "Cancel".into()),
             rect: Rect::new(x, y, 250, 110),
-            should_close: false,
+            // should_close: false,
+            showing: false,
         };
         dialog.width_field.text = default_width.to_string();
         dialog.height_field.text = default_height.to_string();
         dialog
     }
+
+    pub fn show(&mut self) {
+        self.showing = true;
+    }
 }
 
 impl Widget<Option<Layer>> for NewDialog {
     fn draw(&self, p: &mut Platform) {
-        p.draw_rect(self.rect, Color::GRAY);
-        p.draw_text("Width:", self.rect.x + 5, self.rect.y + 10, 20.0, Color::BLACK);
-        p.draw_text("Height:", self.rect.x + 5, self.rect.y + 40, 20.0, Color::BLACK);
-        self.width_field.draw(p);
-        self.height_field.draw(p);
-        self.ok_button.draw(p);
-        self.cancel_button.draw(p);
+        if self.showing {
+            p.draw_rect(self.rect, Color::GRAY);
+            p.draw_text("Width:", self.rect.x + 5, self.rect.y + 10, 20.0, Color::BLACK);
+            p.draw_text("Height:", self.rect.x + 5, self.rect.y + 40, 20.0, Color::BLACK);
+            self.width_field.draw(p);
+            self.height_field.draw(p);
+            self.ok_button.draw(p);
+            self.cancel_button.draw(p);
+        }
     }
 
     fn update(&mut self, p: &mut Platform, mouse_intercepted: &mut bool) -> Option<Layer> {
-        // TODO
-        if self.width_field.update(p, mouse_intercepted) {
-            self.height_field.active = false;
-        }
-        if self.height_field.update(p, mouse_intercepted) {
-            self.width_field.active = false;
-        }
-        if self.ok_button.update(p, mouse_intercepted) {
-            if let (Ok(width), Ok(height)) = (self.width_field.text.parse(), self.height_field.text.parse()) {
-                self.should_close = true;
-                return Some(Layer::new(Rect::new(0, 0, width, height)))
+        if self.showing {
+            if self.width_field.update(p, mouse_intercepted) {
+                self.height_field.active = false;
+            }
+            if self.height_field.update(p, mouse_intercepted) {
+                self.width_field.active = false;
+            }
+            if self.ok_button.update(p, mouse_intercepted) {
+                if let (Ok(width), Ok(height)) = (self.width_field.text.parse(), self.height_field.text.parse()) {
+                    self.showing = false;
+                    return Some(Layer::new(Rect::new(0, 0, width, height)))
+                }
+            }
+            if self.cancel_button.update(p, mouse_intercepted) {
+                self.showing = false;
             }
         }
-        if self.cancel_button.update(p, mouse_intercepted) {
-            self.should_close = true;
-        }
-
         None
     }
 }
@@ -255,10 +266,6 @@ impl TextBox {
             text: String::new(),
             active: false,
         }
-    }
-
-    pub fn get_text(&self) -> String {
-        self.text.clone()
     }
 }
 

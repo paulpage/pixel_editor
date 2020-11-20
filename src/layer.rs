@@ -242,15 +242,11 @@ impl Image {
         // TODO
     }
 
-    pub fn take_snapshot(&self, history: &mut ImageHistory) {
-        // TODO
-    }
-
     pub fn blend(&self, rect: Rect) -> Layer {
         let mut base = Layer::new(Rect::new(0, 0, self.width, self.height));
         for layer in self.layers.iter().rev() {
-            let width = min(layer.rect.width as i32, base.rect.width as i32 - layer.rect.x);
-            let height = min(layer.rect.height as i32, base.rect.height as i32 - layer.rect.y);
+            // let width = min(layer.rect.width as i32, base.rect.width as i32 - layer.rect.x);
+            // let height = min(layer.rect.height as i32, base.rect.height as i32 - layer.rect.y);
             if base.rect.width >= layer.rect.width && base.rect.height >= layer.rect.height {
 
                 let draw_rect = rect.overlap(layer.rect);

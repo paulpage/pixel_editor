@@ -3,7 +3,7 @@ use std::path::Path;
 use std::cmp::{min, max};
 use nfd::Response as FileDialogResponse;
 
-use std::time::{Instant, Duration};
+use std::time::Duration;
 
 mod layer;
 use layer::{Image, ImageHistory, Layer};
@@ -43,19 +43,12 @@ struct State {
     selected_tool: String,
     brush_size: i32,
     currently_drawing: bool,
-    // TODO better way to handle dialog boxes please
-    showing_new_dialog: bool,
     error_text: String,
     cached_blended_layer: Layer,
     dirty_region: Rect,
     last_mousedown_x: i32,
     last_mousedown_y: i32,
     fill_mode: FillMode,
-}
-
-struct ButtonAction<T> {
-    button: Button,
-    action: Box<dyn Fn(&mut T)>,
 }
 
 impl State {
@@ -76,7 +69,6 @@ impl State {
             selected_tool: "Pencil".into(),
             brush_size: 20,
             currently_drawing: false,
-            showing_new_dialog: false,
             error_text: "".into(),
             cached_blended_layer: Layer::new(Rect::new(0, 0, width, height)),
             dirty_region: Rect::new(0, 0, width, height),
@@ -179,7 +171,6 @@ fn main() {
             "Cancel".into(),
         ],
     );
-    confirm_overwrite_dialog.showing = false;
 
     // TODO do we want to make the background a pattern (like white or checkers) instead of or in
     // addition to making the first layer solid white?
@@ -206,16 +197,10 @@ fn main() {
                     let path = Path::new(&file_path);
                     let mut write_file = false;
                     if path.exists() {
-                        confirm_overwrite_dialog.showing = true;
+                        confirm_overwrite_dialog.show();
                         if let Some(text) = confirm_overwrite_dialog.update(&mut p, &mut click_intercepted) {
-                            match &text[..] {
-                                "Yes" => {
-                                    confirm_overwrite_dialog.showing = false;
-                                    write_file = true;
-                                }
-                                _ => {
-                                    confirm_overwrite_dialog.showing = false;
-                                }
+                            if let "Yes" = &text[..] {
+                                write_file =true;
                             }
                         }
                     } else {
@@ -235,12 +220,8 @@ fn main() {
             }
         }
 
-        if new_dialog.should_close {
-            new_dialog.should_close = false;
-            state.showing_new_dialog = false;
-        }
         if new_button.update(&mut p, &mut click_intercepted) {
-            state.showing_new_dialog = true;
+            new_dialog.show();
         }
         if open_button.update(&mut p, &mut click_intercepted) {
             let result = nfd::open_file_dialog(None, None).unwrap();
@@ -404,20 +385,17 @@ fn main() {
             state.dirty_region = Rect::new(0, 0, 0, 0);
         }
 
-        if state.showing_new_dialog {
-            if let Some(layer) = new_dialog.update(&mut p, &mut click_intercepted) {
-                // TODO safeguards!
-                let image = Image::new(layer.rect.width, layer.rect.height);
-                state.image = image;
-                state.active_layer_idx = 0;
-                state.showing_new_dialog = false;
-                state.history = ImageHistory::new();
-                state.canvas = Rect::new(state.canvas.x, state.canvas.y, layer.rect.width, layer.rect.height);
-                state.cached_blended_layer = Layer::new(Rect::new(0, 0, layer.rect.width, layer.rect.height));
-                state.dirty_region = Rect::new(0, 0, layer.rect.width, layer.rect.height);
-                state.temp_layer = Layer::new(Rect::new(0, 0, layer.rect.width, layer.rect.height));
-                active_layer!(state).fill(0, 0, Color::WHITE);
-            }
+        if let Some(layer) = new_dialog.update(&mut p, &mut click_intercepted) {
+            // TODO safeguards!
+            let image = Image::new(layer.rect.width, layer.rect.height);
+            state.image = image;
+            state.active_layer_idx = 0;
+            state.history = ImageHistory::new();
+            state.canvas = Rect::new(state.canvas.x, state.canvas.y, layer.rect.width, layer.rect.height);
+            state.cached_blended_layer = Layer::new(Rect::new(0, 0, layer.rect.width, layer.rect.height));
+            state.dirty_region = Rect::new(0, 0, layer.rect.width, layer.rect.height);
+            state.temp_layer = Layer::new(Rect::new(0, 0, layer.rect.width, layer.rect.height));
+            active_layer!(state).fill(0, 0, Color::WHITE);
         }
 
         if !p.mouse_left_down {
@@ -429,7 +407,6 @@ fn main() {
         let scroll_y = p.get_scroll_delta_y();
         state.canvas_scale *= (10.0 + scroll_y as f64) / 10.0;
 
-        let t = Instant::now();
         p.clear(Color::new(50, 50, 50, 255));
         let rect = Rect::new(0, 0, state.image.width, state.image.height);
         let src_rect = rect;
@@ -440,7 +417,7 @@ fn main() {
             (rect.height as f64 * state.canvas_scale) as u32,
         );
         if state.dirty_region.width > 0 && state.dirty_region.height > 0 {
-            let mut dirty_blended = state.image.blend(state.dirty_region);
+            let dirty_blended = state.image.blend(state.dirty_region);
             state.cached_blended_layer.blend(&dirty_blended);
             state.cached_blended_layer.blend(&state.temp_layer);
         }
@@ -455,9 +432,7 @@ fn main() {
         tool_selector.draw(&mut p);
         layer_selector.draw(&mut p);
         p.draw_text(&state.error_text, 5, p.screen_height - 30, 20.0, Color::new(255, 0, 0, 255));
-        if state.showing_new_dialog {
-            new_dialog.draw(&mut p);
-        }
+        new_dialog.draw(&mut p);
         confirm_overwrite_dialog.draw(&mut p);
 
         p.present();
