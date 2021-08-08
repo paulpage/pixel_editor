@@ -99,7 +99,6 @@ impl Widget<Option<Layer>> for NewDialog {
     }
 
     fn update(&mut self, input: &InputState, mouse_intercepted: &mut bool) -> Option<Layer> {
-        // TODO
         if self.width_field.update(input, mouse_intercepted) {
             self.height_field.active = false;
         }
@@ -116,6 +115,94 @@ impl Widget<Option<Layer>> for NewDialog {
             self.should_close = true;
         }
 
+        None
+    }
+}
+
+pub struct OpenDialog {
+    path_field: TextBox,
+    ok_button: Button,
+    cancel_button: Button,
+    rect: Rect,
+    pub should_close: bool,
+}
+
+impl OpenDialog {
+    pub fn new(x: i32, y: i32, default_path: String) -> Self {
+        let mut dialog = Self {
+            path_field: TextBox::new(Rect::new(x + 70, y + 5, 100, 30)),
+            ok_button: Button::new(Rect::new(x + 5, y + 70, 100, 30), "Ok".into()),
+            cancel_button: Button::new(Rect::new(x + 110, y + 70, 100, 30), "Cancel".into()),
+            rect: Rect::new(x, y, 250, 110),
+            should_close: false,
+        };
+        dialog.path_field.text = default_path;
+        dialog
+    }
+}
+
+// TODO parse this into a path right away
+impl Widget<Option<String>> for OpenDialog {
+    fn draw(&self, graphics: &Graphics) {
+        graphics.draw_rect(self.rect, Color::GRAY);
+        graphics.draw_text("Open Path:", self.rect.x + 5, self.rect.y + 10, 20.0, Color::BLACK);
+        self.path_field.draw(graphics);
+        self.ok_button.draw(graphics);
+        self.cancel_button.draw(graphics);
+    }
+
+    fn update(&mut self, input: &InputState, mouse_intercepted: &mut bool) -> Option<String> {
+        self.path_field.update(input, mouse_intercepted);
+        if self.ok_button.update(input, mouse_intercepted) {
+            return Some(self.path_field.text.clone());
+        }
+        if self.cancel_button.update(input, mouse_intercepted) {
+            self.should_close = true;
+        }
+        None
+    }
+}
+
+pub struct SaveDialog {
+    path_field: TextBox,
+    ok_button: Button,
+    cancel_button: Button,
+    rect: Rect,
+    pub should_close: bool,
+}
+
+impl SaveDialog {
+    pub fn new(x: i32, y: i32, default_path: String) -> Self {
+        let mut dialog = Self {
+            path_field: TextBox::new(Rect::new(x + 70, y + 5, 100, 30)),
+            ok_button: Button::new(Rect::new(x + 5, y + 70, 100, 30), "Ok".into()),
+            cancel_button: Button::new(Rect::new(x + 110, y + 70, 100, 30), "Cancel".into()),
+            rect: Rect::new(x, y, 250, 110),
+            should_close: false,
+        };
+        dialog.path_field.text = default_path;
+        dialog
+    }
+}
+
+// TODO parse this into a path right away
+impl Widget<Option<String>> for SaveDialog {
+    fn draw(&self, graphics: &Graphics) {
+        graphics.draw_rect(self.rect, Color::GRAY);
+        graphics.draw_text("Save Path:", self.rect.x + 5, self.rect.y + 10, 20.0, Color::BLACK);
+        self.path_field.draw(graphics);
+        self.ok_button.draw(graphics);
+        self.cancel_button.draw(graphics);
+    }
+
+    fn update(&mut self, input: &InputState, mouse_intercepted: &mut bool) -> Option<String> {
+        self.path_field.update(input, mouse_intercepted);
+        if self.ok_button.update(input, mouse_intercepted) {
+            return Some(self.path_field.text.clone());
+        }
+        if self.cancel_button.update(input, mouse_intercepted) {
+            self.should_close = true;
+        }
         None
     }
 }

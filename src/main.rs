@@ -2,7 +2,7 @@ use std::path::Path;
 use glutin::event::{Event, WindowEvent, MouseScrollDelta};
 use glutin::event::VirtualKeyCode as Key;
 use glutin::event_loop::{ControlFlow, EventLoop};
-use nfd::Response as FileDialogResponse;
+// use nfd::Response as FileDialogResponse;
 
 mod layer;
 use layer::{Image, ImageHistory, Layer};
@@ -16,7 +16,7 @@ mod util;
 use util::{Rect, Color};
 
 mod gui;
-use gui::{Widget, Button, ColorSelector, ToolSelector, NewDialog, ConfirmationDialog};
+use gui::{Widget, Button, ColorSelector, ToolSelector, NewDialog, OpenDialog, SaveDialog, ConfirmationDialog};
 
 struct State {
     image: Image,
@@ -32,6 +32,8 @@ struct State {
     currently_drawing: bool,
     // TODO better way to handle dialog boxes please
     showing_new_dialog: bool,
+    showing_open_dialog: bool,
+    showing_save_dialog: bool,
     error_text: String,
 }
 
@@ -50,6 +52,8 @@ impl State {
             selected_tool: "Pencil".into(),
             currently_drawing: false,
             showing_new_dialog: false,
+            showing_open_dialog: false,
+            showing_save_dialog: false,
             error_text: "".into(),
         }
     }
@@ -129,6 +133,8 @@ fn main() {
         ],
     );
     let mut new_dialog = NewDialog::new(500, 500, 800, 600);
+    let mut open_dialog = OpenDialog::new(500, 500, "C:\\dev\\test_image.png".to_string());
+    let mut save_dialog = SaveDialog::new(500, 500, "C:\\dev\\test_image.png".to_string());
 
     let mut confirm_overwrite_dialog = ConfirmationDialog::new(
         &gl,
@@ -150,66 +156,27 @@ fn main() {
         input.update(&event);
 
         let mut click_intercepted = false;
-        if save_button.update(&input, &mut click_intercepted) {
-            let result = nfd::open_save_dialog(None, None).unwrap();
-            match result {
-                FileDialogResponse::Okay(file_path) => {
-                    let path = Path::new(&file_path);
-                    let mut write_file = false;
-                    if path.exists() {
-                        confirm_overwrite_dialog.showing = true;
-                        println!("Got here");
-                        if let Some(text) = confirm_overwrite_dialog.update(&input, &mut click_intercepted) {
-                            println!("Found button '{}'", text);
-                            match &text[..] {
-                                "Yes" => {
-                                    confirm_overwrite_dialog.showing = false;
-                                    write_file = true;
-                                }
-                                _ => {
-                                    confirm_overwrite_dialog.showing = false;
-                                }
-                            }
-                        }
-                    } else {
-                        write_file = true;
-                    }
-                    if write_file {
-                        match state.image.save(Path::new(&file_path)) {
-                            Ok(_) => println!("Saved to {}", file_path),
-                            Err(_) => state.error_text = "Failed to save file!".into(),
-                        }
-                    }
-                }
-                FileDialogResponse::OkayMultiple(_) => {
-                    state.error_text = "Can't save to multiple files.".into();
-                }
-                FileDialogResponse::Cancel => {}
-            }
-        }
 
         if new_dialog.should_close {
             new_dialog.should_close = false;
             state.showing_new_dialog = false;
         }
+        if open_dialog.should_close {
+            open_dialog.should_close = false;
+            state.showing_open_dialog = false;
+        }
+        if save_dialog.should_close {
+            save_dialog.should_close = false;
+            state.showing_save_dialog = false;
+        }
         if new_button.update(&input, &mut click_intercepted) {
             state.showing_new_dialog = true;
         }
         if open_button.update(&input, &mut click_intercepted) {
-            let result = nfd::open_file_dialog(None, None).unwrap();
-            match result {
-                FileDialogResponse::Okay(file_path) => {
-                    if let Ok(image) = Image::from_path(&file_path) {
-                        state.image = image;
-                    } else {
-                        state.error_text = "Failed to load file.".into();
-                    }
-                }
-                FileDialogResponse::OkayMultiple(_) => {
-                    state.error_text = "Can't open multiple files.".into();
-                }
-                FileDialogResponse::Cancel => {}
-            }
+            state.showing_open_dialog = true;
+        }
+        if save_button.update(&input, &mut click_intercepted) {
+            state.showing_save_dialog = true;
         }
 
         state.selected_color = color_selector.update(&input, &mut click_intercepted);
@@ -231,6 +198,58 @@ fn main() {
             state.canvas_offset_y = 0;
             state.canvas_offset_baseline_x = input.mouse_x as i32;
             state.canvas_offset_baseline_y = input.mouse_y as i32;
+        }
+
+        if state.showing_new_dialog {
+            if let Some(layer) = new_dialog.update(&input, &mut click_intercepted) {
+                // TODO safeguards!
+                let image = Image::new(layer.rect.width, layer.rect.height);
+                state.image = image;
+                state.active_layer_idx = 0;
+                state.showing_new_dialog = false;
+            }
+        }
+
+        if state.showing_open_dialog {
+            if let Some(path) = open_dialog.update(&input, &mut click_intercepted) {
+                if let Ok(image) = Image::from_path(&path) {
+                    state.image = image;
+                } else {
+                    state.error_text = "Failed to load file.".into();
+                }
+                state.showing_open_dialog = false;
+            }
+        }
+
+        if state.showing_save_dialog {
+            if let Some(path) = save_dialog.update(&input, &mut click_intercepted) {
+                let path = Path::new(&path);
+                let mut write_file = false;
+                if path.exists() {
+                    confirm_overwrite_dialog.showing = true;
+                    if let Some(text) = confirm_overwrite_dialog.update(&input, &mut click_intercepted) {
+                        match &text[..] {
+                            "Yes" => {
+                                confirm_overwrite_dialog.showing = false;
+                                write_file = true;
+                            }
+                            _ => {
+                                confirm_overwrite_dialog.showing = false;
+                            }
+                        }
+                    }
+                } else {
+                    write_file = true;
+                }
+                if write_file {
+                    // TODO do I have to create a new path here?
+                    match state.image.save(Path::new(&path)) {
+                        Ok(_) => println!("Saved to {}", path.display()),
+                        Err(_) => state.error_text = "Failed to save file!".into(),
+                    }
+                }
+                state.showing_save_dialog = false;
+            }
         }
 
         if (input.mouse_left_pressed && !click_intercepted) || state.currently_drawing {
@@ -271,16 +290,6 @@ fn main() {
                     }
                 }
                 _ => {}
-            }
-        }
-
-        if state.showing_new_dialog {
-            if let Some(layer) = new_dialog.update(&input, &mut click_intercepted) {
-                // TODO safeguards!
-                let image = Image::new(layer.rect.width, layer.rect.height);
-                state.image = image;
-                state.active_layer_idx = 0;
-                state.showing_new_dialog = false;
             }
         }
 
@@ -333,6 +342,12 @@ fn main() {
                 gl.draw_text(&state.error_text, 5, gl.window_height - 30, 20.0, Color::new(255, 0, 0, 255));
                 if state.showing_new_dialog {
                     new_dialog.draw(&gl);
+                }
+                if state.showing_open_dialog {
+                    open_dialog.draw(&gl);
+                }
+                if state.showing_save_dialog {
+                    save_dialog.draw(&gl);
                 }
                 confirm_overwrite_dialog.draw(&gl);
                 gl.swap();
