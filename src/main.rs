@@ -332,8 +332,7 @@ fn main() {
                     (rect.width as f64 * state.canvas_scale) as u32,
                     (rect.height as f64 * state.canvas_scale) as u32,
                 );
-                let blended = state.image.blend();
-                gl.draw_texture(src_rect, dest_rect, blended.data.clone().into_raw());
+                gl.draw_texture(src_rect, dest_rect, state.image.raw_data());
                 save_button.draw(&gl);
                 new_button.draw(&gl);
                 open_button.draw(&gl);

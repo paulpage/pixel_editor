@@ -339,7 +339,7 @@ pub fn init(
     };
 
     gl::load_with(|ptr| gl_context.get_proc_address(ptr) as *const _);
-    let font = rusttype::Font::try_from_bytes(include_bytes!("C:/Windows/Fonts/consola.ttf") as &[u8]).unwrap();
+    let font = rusttype::Font::try_from_bytes(include_bytes!("../data/fonts/monospace.ttf") as &[u8]).unwrap();
     unsafe {
         gl::Enable(gl::DEPTH_TEST);
         gl::DepthFunc(gl::LESS);

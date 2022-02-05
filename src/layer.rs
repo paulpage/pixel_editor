@@ -9,7 +9,7 @@ use std::cmp::{min, max};
 
 pub struct Layer {
     pub rect: Rect,
-    pub data: image::RgbaImage,
+    pub data: Vec<Color>,
     pub z_index: i32,
 }
 
@@ -26,7 +26,8 @@ pub struct ImageHistory {
 
 impl Layer {
     pub fn new(rect: Rect) -> Self {
-        let data = RgbaImage::from_pixel(rect.width, rect.height, [255, 255, 255, 255].into());
+        let color = Color::WHITE;
+        let data = vec![color; (rect.width * rect.height) as usize];
         Self {
             rect,
             data,
@@ -35,17 +36,29 @@ impl Layer {
     }
 
     pub fn from_path(x: i32, y: i32, path: &str) -> Result<Self, ImageError> {
-        let img = image::open(path)?.to_rgba();
+        let image = image::open(path)?.to_rgba();
+        let rect = Rect::new(x, y, image.width(), image.height());
+
+        let color = Color::WHITE;
+        let mut data = vec![color; (rect.width * rect.height) as usize];
+
+        for y in 0..rect.height {
+            for x in 0..rect.width {
+                let c = image.get_pixel(x as u32, y as u32);
+                data[(y * rect.width + x) as usize] = Color::new(c[0], c[1], c[2], c[3]);
+            }
+        }
+
         Ok(Self {
-            rect: Rect::new(x, y, img.width(), img.height()),
-            data: img,
+            rect,
+            data,
             z_index: 0,
         })
     }
 
     pub fn draw_pixel(&mut self, x: i32, y: i32, color: Color) {
         if self.rect.contains_point(x, y) {
-            self.data.put_pixel(x as u32, y as u32, [color.r, color.g, color.b, color.a].into());
+            self.data[(y as usize * self.rect.width as usize + x as usize)] = color;
         }
     }
 
@@ -66,8 +79,7 @@ impl Layer {
 
     pub fn get_pixel(&self, x: i32, y: i32) -> Option<Color> {
         if self.rect.contains_point(x, y) {
-            let color = self.data.get_pixel(x as u32, y as u32);
-            return Some(Color::new(color[0], color[1], color[2], color[3]))
+            return Some(self.data[y as usize * self.rect.width as usize + x as usize]);
         }
         None
     }
@@ -205,9 +217,36 @@ impl Image {
         base
     }
 
-    pub fn save(&self, path: &Path) -> Result<(), ()> {
+    pub fn raw_data(&self) -> Vec<u8> {
+
         let blended = self.blend();
-        match blended.data.save(path) {
+
+        let mut raw_data = vec![0; blended.rect.width as usize * blended.rect.height as usize * 4];
+        for y in 0..blended.rect.height {
+            for x in 0..blended.rect.width {
+                let p = y as usize * blended.rect.width as usize + x as usize;
+                let color = blended.data[p];
+                raw_data[p * 4 + 0] = color.r;
+                raw_data[p * 4 + 1] = color.g;
+                raw_data[p * 4 + 2] = color.b;
+                raw_data[p * 4 + 3] = color.a;
+            }
+        }
+        return raw_data;
+    }
+
+    pub fn save(&self, path: &Path) -> Result<(), ()> {
+
+        let blended = self.blend();
+        let mut image = RgbaImage::from_pixel(blended.rect.width, blended.rect.height, [255, 255, 255, 255].into());
+        for y in 0..blended.rect.height {
+            for x in 0..blended.rect.width {
+                let color = blended.get_pixel(x as i32, y as i32).unwrap();
+                image.put_pixel(x as u32, y as u32, [color.r, color.g, color.b, color.a].into());
+            }
+        }
+
+        match image.save(path) {
             Ok(()) => Ok(()),
             Err(_) => Err(()),
         }
