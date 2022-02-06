@@ -320,14 +320,15 @@ fn create_program(
 }
 
 pub fn init(
-    event_loop: &EventLoop<()>
+    event_loop: &EventLoop<()>,
+    title: &str,
     // gl_context: &glutin::Context<PossiblyCurrent>
     // window_width: i32,
     // window_height: i32,
 ) -> Graphics {
 
     let windowed_context = {
-        let window_builder = WindowBuilder::new().with_title("Bricks");
+        let window_builder = WindowBuilder::new().with_title(title);
         let windowed_context =
             ContextBuilder::new().with_vsync(true).build_windowed(window_builder, event_loop).unwrap();
         unsafe { windowed_context.make_current().unwrap() }
@@ -657,41 +658,6 @@ impl Graphics {
         }
     }
 
-    // pub fn render_text(&self, text: &str, max_width: i32, scale: f32) -> {
-    //     let font_scale = Scale::uniform(scale);
-    //     let v_metrics = self.font.v_metrics(font_scale);
-    //     let x = x as f32 * 2.0 / self.window_width as f32 - 1.0;
-    //     let y = 1.0 - y as f32 * 2.0 / self.window_height as f32;
-    //     let glyphs: Vec<_> = self.font
-    //         .layout(text, font_scale, point(x, y + v_metrics.ascent))
-    //         .collect();
-
-    //     let glyphs_height = (v_metrics.ascent - v_metrics.descent).ceil() as usize;
-    //     let glyphs_width = glyphs
-    //         .iter()
-    //         .rev()
-    //         .map(|g| g.position().x as f32 + g.unpositioned().h_metrics().advance_width)
-    //         .next()
-    //         .unwrap_or(0.0)
-    //         .ceil() as usize;
-
-    //     let mut buffer: Vec<f32> = vec![0.0; glyphs_width * glyphs_height];
-
-    //     for glyph in glyphs {
-    //         if let Some(bounding_box) = glyph.pixel_bounding_box() {
-
-    //             let min_x = bounding_box.min.x;
-    //             let min_y = bounding_box.min.y;
-
-    //             glyph.draw(|x, y, v| {
-    //                 let x = std::cmp::max(x as i32 + min_x, 1) as usize - 1;
-    //                 let y = std::cmp::max(y as i32 + min_y, 1) as usize - 1;
-    //                 let index = y * glyphs_width + x;
-    //                 buffer[index] = v;
-    //             });
-    //         }
-    //     }
-    // }
     pub fn layout_text(&self, text: &str, scale: f32) -> (Vec<PositionedGlyph<'_>>, usize, usize) {
         let font_scale = Scale::uniform(scale);
         let v_metrics = self.font.v_metrics(font_scale);

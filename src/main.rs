@@ -82,7 +82,7 @@ impl State {
 fn main() {
 
     let event_loop = EventLoop::new();
-    let mut gl = graphics::init(&event_loop);
+    let mut gl = graphics::init(&event_loop, "Pixel Editor");
     let mut input = InputState::new();
 
     let mut save_button = Button::new(Rect::new(5, 5, 100, 30), "Save".into());
