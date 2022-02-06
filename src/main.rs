@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::time::Instant;
 use glutin::event::{Event, WindowEvent, MouseScrollDelta};
 use glutin::event::VirtualKeyCode as Key;
 use glutin::event_loop::{ControlFlow, EventLoop};
@@ -40,7 +41,7 @@ struct State {
 impl State {
     fn new() -> Self {
         Self {
-            image: Image::new(800, 600),
+            image: Image::new(4000, 4000),
             active_layer_idx: 0,
             canvas: Rect::new(100, 100, 800, 600),
             canvas_scale: 2.0,
@@ -58,9 +59,9 @@ impl State {
         }
     }
     
-    fn screen_to_canvas(&self, x: f64, y: f64) -> (i32, i32) {
-        let layer_x = ((x - self.canvas.x as f64 + (self.image.width as f64 * self.canvas_scale / 2.0)) / self.canvas_scale - 0.5).round() as i32;
-        let layer_y = ((y - self.canvas.y as f64 + (self.image.height as f64 * self.canvas_scale / 2.0)) / self.canvas_scale - 0.5).round() as i32;
+    fn screen_to_canvas(&mut self, x: f64, y: f64) -> (i32, i32) {
+        let layer_x = ((x - self.canvas.x as f64 + (self.image.width as f64 * self.canvas_scale / 2.0)) / self.canvas_scale - 0.5).round() as i32 - self.active_layer().rect.x;
+        let layer_y = ((y - self.canvas.y as f64 + (self.image.height as f64 * self.canvas_scale / 2.0)) / self.canvas_scale - 0.5).round() as i32 - self.active_layer().rect.y;
         (layer_x, layer_y)
     }
 
@@ -150,8 +151,18 @@ fn main() {
     confirm_overwrite_dialog.showing = false;
 
     let mut state = State::new();
+    state.image.layers.push(Layer::new(Rect::new(0, 0, 800, 600)));
+    state.active_layer_idx = 1;
+    state.active_layer().fill(0, 0, Color::new(255, 0, 0, 255));
+    state.image.layers.push(Layer::new(Rect::new(0, 0, 800, 600)));
+    state.active_layer_idx = 2;
+    state.active_layer().fill(0, 0, Color::new(0, 255, 0, 255));
+    state.image.layers.push(Layer::new(Rect::new(0, 0, 800, 600)));
+    state.active_layer_idx = 3;
+    state.active_layer().fill(0, 0, Color::new(0, 0, 255, 255));
 
     event_loop.run(move |event, _, control_flow| {
+
         *control_flow = ControlFlow::Poll;
         input.update(&event);
 
@@ -182,8 +193,25 @@ fn main() {
         state.selected_color = color_selector.update(&input, &mut click_intercepted);
         state.selected_tool = tool_selector.update(&input, &mut click_intercepted);
 
-        if input.key_down(Key::Q) {
+        if input.key_pressed(Key::Q) {
             *control_flow = ControlFlow::Exit;
+        }
+        if input.key_pressed(Key::Left) {
+            state.active_layer().rect.x -= 100;
+        }
+        if input.key_pressed(Key::Right) {
+            state.active_layer().rect.x += 100;
+        }
+        if input.key_pressed(Key::Up) {
+            state.active_layer().rect.y -= 100;
+        }
+        if input.key_pressed(Key::Down) {
+            state.active_layer().rect.y += 100;
+        }
+        if input.key_pressed(Key::Tab) {
+            state.active_layer_idx += 1;
+            state.active_layer_idx %= state.image.layers.len();
+            println!("Active Layer Index: {}", state.active_layer_idx);
         }
 
         if input.mouse_middle_pressed {
@@ -287,6 +315,7 @@ fn main() {
                         if (dx as f64 * dx as f64 + dy as f64 * dy as f64).sqrt() < 50.0 {
                             state.active_layer().draw_pixel(x + dx, y + dy, color);
                         }
+                        state.active_layer().add_dirty_rect(Rect::new(x - 51, y - 51, 102, 102));
                     }
                 }
                 _ => {}
@@ -323,6 +352,7 @@ fn main() {
                 _ => (),
             },
             Event::MainEventsCleared => {
+                let mut t = Instant::now();
                 gl.clear(Color::new(50, 50, 50, 255));
                 let rect = Rect::new(0, 0, state.image.width, state.image.height);
                 let src_rect = rect;
@@ -349,7 +379,11 @@ fn main() {
                     save_dialog.draw(&gl);
                 }
                 confirm_overwrite_dialog.draw(&gl);
+
                 gl.swap();
+                // println!("Frame time: {} ms", t.elapsed().as_millis());
+                // println!("Dirty rect: {:?}", state.active_layer().dirty_rect);
+
             },
             _ => (),
         }

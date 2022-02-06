@@ -11,6 +11,7 @@ pub struct Layer {
     pub rect: Rect,
     pub data: Vec<Color>,
     pub z_index: i32,
+    pub dirty_rect: Rect,
 }
 
 pub struct Image {
@@ -32,6 +33,7 @@ impl Layer {
             rect,
             data,
             z_index: 0,
+            dirty_rect: Rect::new(0, 0, 0, 0),
         }
     }
 
@@ -53,13 +55,22 @@ impl Layer {
             rect,
             data,
             z_index: 0,
+            dirty_rect: Rect::new(0, 0, 0, 0),
         })
     }
 
+    pub fn contains_point(&self, x: i32, y: i32) -> bool {
+        x >= 0 && x < self.rect.width as i32 && y >= 0 && y < self.rect.height as i32
+    }
+
     pub fn draw_pixel(&mut self, x: i32, y: i32, color: Color) {
-        if self.rect.contains_point(x, y) {
+        if self.contains_point(x, y) {
             self.data[(y as usize * self.rect.width as usize + x as usize)] = color;
         }
+    }
+
+    pub fn draw_pixel_unchecked(&mut self, x: i32, y: i32, color: Color) {
+        self.data[(y as usize * self.rect.width as usize + x as usize)] = color;
     }
 
     pub fn draw_line(&mut self, x1: i32, y1: i32, x2: i32, y2: i32, color: Color) {
@@ -75,13 +86,23 @@ impl Layer {
                 self.draw_pixel((x1 as f64 + dx * i as f64) as i32, (y1 as f64 + dy * i as f64) as i32, color);
             }
         }
+        self.add_dirty_rect(Rect {
+            x: min(x1, x2) - 1,
+            y: min(y1, y2) - 1,
+            width: width as u32 + 2,
+            height: height as u32 + 2,
+        });
     }
 
     pub fn get_pixel(&self, x: i32, y: i32) -> Option<Color> {
-        if self.rect.contains_point(x, y) {
+        if self.contains_point(x, y) {
             return Some(self.data[y as usize * self.rect.width as usize + x as usize]);
         }
         None
+    }
+
+    pub fn get_pixel_unchecked(&self, x: i32, y: i32) -> Color {
+        self.data[y as usize * self.rect.width as usize + x as usize]
     }
 
     pub fn fill(&mut self, x: i32, y: i32, color: Color) {
@@ -121,43 +142,55 @@ impl Layer {
                 }
             }
         }
+        self.add_dirty_rect(self.rect);
     }
 
     pub fn blend(&mut self, other: &Layer) -> bool {
-        let width = min(other.rect.width as i32, self.rect.width as i32 - other.rect.x);
-        let height = min(other.rect.height as i32, self.rect.height as i32 - other.rect.y);
-        if self.rect.width >= other.rect.width && self.rect.height >= other.rect.height {
-            for y in max(0, other.rect.y)..other.rect.y + height {
-                for x in max(0, other.rect.x)..min(self.rect.width as i32, other.rect.x + width) {
 
-                    let base_color = self.get_pixel(x, y).unwrap();
-                    let other_color = other.get_pixel(x - other.rect.x, y - other.rect.y).unwrap();
+        let target_rect = self.rect.intersection(other.rect).intersection(self.dirty_rect.union(other.dirty_rect));
 
-                    if other_color.a == 0 {
-                        continue;
-                    }
-                    if other_color.a == 255 {
-                        self.draw_pixel(x, y, other_color);
-                        continue;
-                    }
-
-                    let a1 = other_color.a as f64 / 255.0;
-                    let a2 = base_color.a as f64 / 255.0;
-                    let factor = a2 * (1.0 - a1);
-
-                    
-                    let new_color = Color {
-                        r: (base_color.r as f64 * a1 + other_color.r as f64 * factor / (a1 + factor)) as u8,
-                        g: (base_color.r as f64 * a1 + other_color.r as f64 * factor / (a1 + factor)) as u8,
-                        b: (base_color.r as f64 * a1 + other_color.r as f64 * factor / (a1 + factor)) as u8,
-                        a: (base_color.r as f64 * a1 + other_color.r as f64 * factor / (a1 + factor)) as u8,
-                    };
-                    self.draw_pixel(x, y, new_color);
-                }
-            }
-            return true;
+        if target_rect.width == 0 || target_rect.height == 0 {
+            return false;
         }
-        false
+
+        for y in target_rect.y..target_rect.y + target_rect.height as i32 {
+            for x in target_rect.x..target_rect.x + target_rect.width as i32 {
+                if !(self.rect.contains_point(x, y) && other.rect.contains_point(x - other.rect.x, y - other.rect.y)) {
+                }
+                let base_color = self.get_pixel_unchecked(x, y);
+                let other_color = other.get_pixel_unchecked(x - other.rect.x, y - other.rect.y);
+
+                if other_color.a == 0 {
+                    continue;
+                }
+                if other_color.a == 255 {
+                    self.draw_pixel(x, y, other_color);
+                    continue;
+                }
+
+                let a1 = other_color.a as f64 / 255.0;
+                let a2 = base_color.a as f64 / 255.0;
+                let factor = a2 * (1.0 - a1);
+
+                let new_color = Color {
+                    r: (base_color.r as f64 * a1 + other_color.r as f64 * factor / (a1 + factor)) as u8,
+                    g: (base_color.r as f64 * a1 + other_color.r as f64 * factor / (a1 + factor)) as u8,
+                    b: (base_color.r as f64 * a1 + other_color.r as f64 * factor / (a1 + factor)) as u8,
+                    a: (base_color.r as f64 * a1 + other_color.r as f64 * factor / (a1 + factor)) as u8,
+                };
+                self.draw_pixel(x, y, new_color);
+            }
+        }
+
+        return true;
+    }
+
+    pub fn add_dirty_rect(&mut self, rect: Rect) {
+        self.dirty_rect = self.dirty_rect.union(rect);
+    }
+
+    pub fn clear_dirty_rect(&mut self) {
+        self.dirty_rect = Rect::new(0, 0, 0, 0);
     }
 }
 

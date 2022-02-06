@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+use std::cmp::{min, max};
 
 pub struct Point {
     pub x: i32,
@@ -14,7 +15,7 @@ impl Point {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Rect {
     pub x: i32,
     pub y: i32,
@@ -34,6 +35,39 @@ impl Rect {
 
     pub fn contains_point(&self, x: i32, y: i32) -> bool {
         x >= self.x && x < self.x + self.width as i32 && y >= self.y && y < self.y + self.height as i32
+    }
+
+    pub fn union(&self, other: Rect) -> Rect {
+        if self.width == 0 || self.height == 0 {
+            return other;
+        }
+        if other.width == 0 || other.height == 0 {
+            return *self;
+        }
+        let r = Rect {
+            x: min(self.x, other.x),
+            y: min(self.y, other.y),
+            width: (max(self.x + self.width as i32, other.x + other.width as i32) - min(self.x, other.x)) as u32,
+            height: (max(self.y + self.height as i32, other.y + other.height as i32) - min(self.y, other.y)) as u32,
+        };
+        return r;
+    }
+
+    pub fn has_intersection(&self, other: Rect) -> bool {
+        (self.x <= other.x + other.width as i32 && self.x + self.width as i32 >= other.x
+         && self.y <= other.y + other.height as i32 && self.y + self.height as i32 >= other.y)
+    }
+
+    pub fn intersection(&self, other: Rect) -> Rect {
+        if !Rect::has_intersection(self, other) {
+            return Rect::new(0, 0, 0, 0);
+        }
+        Rect {
+            x: max(self.x, other.x),
+            y: max(self.y, other.y),
+            width: (min(self.x + self.width as i32, other.x + other.width as i32) - max(self.x, other.x)) as u32,
+            height: (min(self.y + self.height as i32, other.y + other.height as i32) - max(self.y, other.y)) as u32,
+        }
     }
 }
 
