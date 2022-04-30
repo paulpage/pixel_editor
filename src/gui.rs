@@ -16,6 +16,67 @@ pub struct ConfirmationDialog {
     pub showing: bool,
 }
 
+pub struct Dialog {
+    title: String,
+    rect: Rect,
+    border_size: i32,
+    titlebar_size: i32,
+    color: Color,
+    border_color: Color,
+    text_color: Color,
+    is_dragging: bool,
+}
+
+impl Dialog {
+    pub fn new(title: &str) -> Self {
+        Self {
+            title: title.to_string(),
+            rect: Rect::new(0, 0, 200, 200),
+            border_size: 5,
+            titlebar_size: 20,
+            color: Color::GRAY,
+            border_color: Color::new(0, 0, 50, 255),
+            text_color: Color::WHITE,
+            is_dragging: false,
+        }
+    }
+
+    pub fn draw(&self, graphics: &Graphics) {
+        graphics.draw_rect(self.rect, self.border_color);
+        graphics.draw_rect(Rect {
+            x: self.rect.x + self.border_size,
+            y: self.rect.y + self.border_size + self.titlebar_size,
+            width: self.rect.width - self.border_size as u32 * 2,
+            height: self.rect.height - self.border_size as u32 * 2 - self.titlebar_size as u32,
+        }, self.color);
+        graphics.draw_text(&self.title, self.rect.x + self.border_size, self.rect.y + self.border_size, 20.0, self.text_color);
+    }
+
+    pub fn update(&mut self, input: &InputState, click_intercepted: &mut bool) {
+
+        let titlebar_rect = Rect {
+            x: self.rect.x,
+            y: self.rect.y,
+            width: self.rect.width,
+            height: (self.border_size + self.titlebar_size) as u32,
+        };
+
+        if input.mouse_left_pressed && titlebar_rect.contains_point(input.mouse_x as i32, input.mouse_y as i32) && !click_intercepted {
+            self.is_dragging = true;
+        } else if !input.mouse_left_down {
+            self.is_dragging = false;
+        }
+
+        if self.is_dragging {
+            self.rect.x += input.mouse_delta_x as i32;
+            self.rect.y += input.mouse_delta_y as i32;
+        }
+
+        *click_intercepted = self.rect.contains_point(input.mouse_x as i32, input.mouse_y as i32) && input.mouse_left_down || *click_intercepted;
+    }
+}
+
+
 impl ConfirmationDialog {
     pub fn new(graphics: &Graphics, x: i32, y: i32, message: String, options: Vec<String>) -> Self {
         let (_, text_width, _) = graphics.layout_text(&message, 20.0);

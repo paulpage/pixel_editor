@@ -17,7 +17,7 @@ mod util;
 use util::{Rect, Color};
 
 mod gui;
-use gui::{Widget, Button, ColorSelector, ToolSelector, NewDialog, OpenDialog, SaveDialog, ConfirmationDialog};
+use gui::{Widget, Button, ColorSelector, ToolSelector, NewDialog, OpenDialog, SaveDialog, ConfirmationDialog, Dialog};
 
 struct State {
     image: Image,
@@ -41,7 +41,7 @@ struct State {
 impl State {
     fn new() -> Self {
         Self {
-            image: Image::new(4000, 4000),
+            image: Image::new(800, 600),
             active_layer_idx: 0,
             canvas: Rect::new(100, 100, 800, 600),
             canvas_scale: 2.0,
@@ -85,6 +85,9 @@ fn main() {
     let event_loop = EventLoop::new();
     let mut gl = graphics::init(&event_loop, "Pixel Editor");
     let mut input = InputState::new();
+
+    let mut test_dialog = Dialog::new("Test Dialog");
+    let mut layer_dialog = Dialog::new("Layers");
 
     let mut save_button = Button::new(Rect::new(5, 5, 100, 30), "Save".into());
 
@@ -167,31 +170,36 @@ fn main() {
         input.update(&event);
 
         let mut click_intercepted = false;
+        test_dialog.update(&input, &mut click_intercepted);
+        layer_dialog.update(&input, &mut click_intercepted);
+        if !click_intercepted {
 
-        if new_dialog.should_close {
-            new_dialog.should_close = false;
-            state.showing_new_dialog = false;
-        }
-        if open_dialog.should_close {
-            open_dialog.should_close = false;
-            state.showing_open_dialog = false;
-        }
-        if save_dialog.should_close {
-            save_dialog.should_close = false;
-            state.showing_save_dialog = false;
-        }
-        if new_button.update(&input, &mut click_intercepted) {
-            state.showing_new_dialog = true;
-        }
-        if open_button.update(&input, &mut click_intercepted) {
-            state.showing_open_dialog = true;
-        }
-        if save_button.update(&input, &mut click_intercepted) {
-            state.showing_save_dialog = true;
-        }
+            if new_dialog.should_close {
+                new_dialog.should_close = false;
+                state.showing_new_dialog = false;
+            }
+            if open_dialog.should_close {
+                open_dialog.should_close = false;
+                state.showing_open_dialog = false;
+            }
+            if save_dialog.should_close {
+                save_dialog.should_close = false;
+                state.showing_save_dialog = false;
+            }
+            if new_button.update(&input, &mut click_intercepted) {
+                state.showing_new_dialog = true;
+            }
+            if open_button.update(&input, &mut click_intercepted) {
+                state.showing_open_dialog = true;
+            }
+            if save_button.update(&input, &mut click_intercepted) {
+                state.showing_save_dialog = true;
+            }
 
-        state.selected_color = color_selector.update(&input, &mut click_intercepted);
-        state.selected_tool = tool_selector.update(&input, &mut click_intercepted);
+            state.selected_color = color_selector.update(&input, &mut click_intercepted);
+            state.selected_tool = tool_selector.update(&input, &mut click_intercepted);
+
+        }
 
         if input.key_pressed(Key::Q) {
             *control_flow = ControlFlow::Exit;
@@ -212,6 +220,8 @@ fn main() {
             state.active_layer_idx += 1;
             state.active_layer_idx %= state.image.layers.len();
             println!("Active Layer Index: {}", state.active_layer_idx);
+        }
+        if input.key_pressed(Key::Backslash) {
         }
 
         if input.mouse_middle_pressed {
@@ -380,7 +390,11 @@ fn main() {
                 }
                 confirm_overwrite_dialog.draw(&gl);
 
+                test_dialog.draw(&gl);
+                layer_dialog.draw(&gl);
+
                 gl.swap();
+
                 // println!("Frame time: {} ms", t.elapsed().as_millis());
                 // println!("Dirty rect: {:?}", state.active_layer().dirty_rect);
 
