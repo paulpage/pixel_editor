@@ -61,7 +61,7 @@ impl Dialog {
             height: (self.border_size + self.titlebar_size) as u32,
         };
 
-        if input.mouse_left_pressed && titlebar_rect.contains_point(input.mouse_x as i32, input.mouse_y as i32) && !click_intercepted {
+        if input.mouse_left_pressed && titlebar_rect.contains_point(input.mouse_x as i32, input.mouse_y as i32) && !(*click_intercepted) {
             self.is_dragging = true;
         } else if !input.mouse_left_down {
             self.is_dragging = false;
