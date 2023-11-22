@@ -70,8 +70,8 @@ impl State {
     }
     
     fn screen_to_canvas(&mut self, x: f32, y: f32) -> (i32, i32) {
-        let layer_x = ((x - self.canvas.x + (self.image.w as f32 * self.canvas_scale / 2.0)) / self.canvas_scale - 0.5).round() as i32 - self.active_layer().rect.x;
-        let layer_y = ((y - self.canvas.y + (self.image.h as f32 * self.canvas_scale / 2.0)) / self.canvas_scale - 0.5).round() as i32 - self.active_layer().rect.y;
+        let layer_x = ((x - self.canvas.x + (self.image.rect.w as f32 * self.canvas_scale / 2.0)) / self.canvas_scale - 0.5).round() as i32 - self.active_layer().rect.x;
+        let layer_y = ((y - self.canvas.y + (self.image.rect.h as f32 * self.canvas_scale / 2.0)) / self.canvas_scale - 0.5).round() as i32 - self.active_layer().rect.y;
         (layer_x, layer_y)
     }
 
@@ -92,6 +92,7 @@ impl State {
 
 #[macroquad::main("Pixel Editor")]
 async fn main() {
+
 
     // let event_loop = EventLoop::new();
     // let mut gl = graphics::init(&event_loop, "Pixel Editor");
@@ -148,8 +149,8 @@ async fn main() {
         ],
     );
     let mut new_dialog = NewDialog::new(500.0, 500.0, 800.0, 600.0);
-    let mut open_dialog = OpenDialog::new(500.0, 500.0, "C:\\dev\\test_image.png".to_string());
-    let mut save_dialog = SaveDialog::new(500.0, 500.0, "C:\\dev\\test_image.png".to_string());
+    let mut open_dialog = OpenDialog::new(500.0, 500.0, "test_image.png".to_string());
+    let mut save_dialog = SaveDialog::new(500.0, 500.0, "test_image.png".to_string());
 
     let mut confirm_overwrite_dialog = ConfirmationDialog::new(
         400.0,
@@ -173,6 +174,8 @@ async fn main() {
     state.image.layers.push(Layer::new(ImageRect::new(0, 0, 800, 600)));
     state.active_layer_idx = 3;
     state.active_layer().fill(0, 0, Color::new(0.0, 0.0, 1.0, 1.0));
+
+    let mut texture = app::Texture2D::from_rgba8(state.image.rect.w as u16, state.image.rect.h as u16, &state.image.raw_data());
 
     loop {
         let mut click_intercepted = false;
@@ -251,6 +254,7 @@ async fn main() {
                 // TODO safeguards!
                 let image = Image::new(layer.rect.w, layer.rect.h);
                 state.image = image;
+                texture = app::Texture2D::from_rgba8(state.image.rect.w as u16, state.image.rect.h as u16, &state.image.raw_data());
                 state.active_layer_idx = 0;
                 state.showing_new_dialog = false;
             }
@@ -259,6 +263,7 @@ async fn main() {
         if state.showing_open_dialog {
             if let Some(path) = open_dialog.update(&mut click_intercepted) {
                 if let Ok(image) = Image::from_path(&path) {
+                    texture = app::Texture2D::from_rgba8(state.image.rect.w as u16, state.image.rect.h as u16, &state.image.raw_data());
                     state.image = image;
                 } else {
                     state.error_text = "Failed to load file.".into();
@@ -327,10 +332,10 @@ async fn main() {
                     state.active_layer().fill(x, y, color);
                 }
                 "Spray Can" => {
-                    for _ in 0..10 {
-                        let dx = rand::random::<i32>() % 100 - 50;
-                        let dy = rand::random::<i32>() % 100 - 50;
-                        if (dx as f64 * dx as f64 + dy as f64 * dy as f64).sqrt() < 50.0 {
+                    for _ in 0..100 {
+                        let dx = macroquad::rand::rand() as i32 % 100 - 50;
+                        let dy = macroquad::rand::rand() as i32 % 100 - 50;
+                        if (dx as f32 * dx as f32 + dy as f32 * dy as f32).sqrt() < 50.0 {
                             state.active_layer().draw_pixel(x + dx, y + dy, color);
                         }
                         state.active_layer().add_dirty_rect(ImageRect::new(x - 51, y - 51, 102, 102));
@@ -356,12 +361,12 @@ async fn main() {
 
         let (_wheel_x, wheel_y) = app::mouse_wheel();
         if wheel_y != 0.0 {
-            state.canvas_scale *= (10.0 + wheel_y) / 10.0;
+            state.canvas_scale *= (10.0 + (wheel_y / 120.0)) / 10.0;
             state.update_canvas_position();
         }
 
         app::clear_background(Color::new(50.0 / 255.0, 50.0 / 255.0, 50.0 / 255.0, 255.0 / 255.0));
-        let rect = Rect::new(0.0, 0.0, state.image.w as f32, state.image.h as f32);
+        let rect = Rect::new(0.0, 0.0, state.image.rect.w as f32, state.image.rect.h as f32);
         let src_rect = rect;
         let dest_rect = Rect::new(
             state.canvas.x - (rect.w * state.canvas_scale as f32 / 2.0).round(),
@@ -371,7 +376,20 @@ async fn main() {
         );
         // TODO Texture2D only supports u16, determine if we need to find an
         // alternative or go with it and do bounds checking
-        let texture = app::Texture2D::from_rgba8(state.image.w as u16, state.image.h as u16, &state.image.raw_data());
+        let dirty_rect = state.image.dirty_rect();
+        // let dirty_rect = state.image.rect;
+        let dirty_data = state.image.partial_data(dirty_rect);
+        let dirty_image = app::Image {
+            bytes: dirty_data,
+            width: dirty_rect.w as u16,
+            height: dirty_rect.h as u16,
+        };
+        if dirty_rect.w != 0 && dirty_rect.h != 0 {
+            texture.update_part(&dirty_image, dirty_rect.x, dirty_rect.y, dirty_rect.w as i32, dirty_rect.h as i32);
+        }
+        state.image.clear_dirty();
+
+        texture.set_filter(app::FilterMode::Nearest);
         app::draw_texture_ex(&texture, dest_rect.x, dest_rect.y, app::WHITE, app::DrawTextureParams {
             dest_size: Some(Vec2::new(dest_rect.w, dest_rect.h)),
             source: Some(src_rect),

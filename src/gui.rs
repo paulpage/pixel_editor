@@ -315,7 +315,7 @@ impl Widget<bool> for Button {
             ButtonState::Pressed => (self.color_pressed, self.text_color_pressed),
         };
         app::draw_rect(self.rect, button_color);
-        app::draw_text(&self.text, self.rect.x + 5.0, self.rect.y + 5.0, self.text_size, text_color);
+        app::draw_text(&self.text, self.rect.x + 5.0, self.rect.y + (self.rect.h + self.text_size / 2.0) / 2.0, self.text_size, text_color);
     }
 
     fn update(&mut self, mouse_intercepted: &mut bool) -> bool {
@@ -361,6 +361,7 @@ impl Widget<bool> for TextBox {
     fn draw(&self) {
         app::draw_rect(self.rect, app::BLACK);
         app::draw_rect(Rect::new(self.rect.x + 2.0, self.rect.y + 2.0, self.rect.w - 4.0, self.rect.h - 4.0), app::WHITE);
+        app::draw_text(&self.text, self.rect.x + 4.0, self.rect.y + 4.0, 20.0, app::BLACK);
         // TODO bring this back (this draws the cursor)
         // let text_rect = app::draw_text(&self.text, self.rect.x + 4.0, self.rect.y + 4.0, 20.0, app::BLACK);
         // if self.active {
@@ -511,7 +512,7 @@ impl Widget<String> for ToolSelector {
             }
 
             app::draw_rect(*rect, Color::new(100.0/255.0, 100.0/255.0, 100.0/255.0, 1.0));
-            app::draw_text(&self.labels[i], rect.x + 4.0, rect.y + 4.0, 20.0, app::BLACK);
+            app::draw_text(&self.labels[i], rect.x + 4.0, rect.y + rect.h / 2.0, 20.0, app::BLACK);
         }
     }
 

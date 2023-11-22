@@ -8,7 +8,7 @@ use std::cmp::{min, max};
 
 use super::app::{self, Color};
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct ImageRect {
     pub x: i32,
     pub y: i32,
@@ -72,8 +72,7 @@ pub struct Layer {
 }
 
 pub struct Image {
-    pub w: u32,
-    pub h: u32,
+    pub rect: ImageRect,
     pub layers: Vec<Layer>,
 }
 
@@ -202,9 +201,9 @@ impl Layer {
         self.add_dirty_rect(self.rect);
     }
 
-    pub fn blend(&mut self, other: &Layer) -> bool {
+    pub fn blend(&mut self, other: &Layer, clip_rect: ImageRect) -> bool {
 
-        let target_rect = self.rect.intersection(other.rect).intersection(self.dirty_rect.union(other.dirty_rect));
+        let target_rect = self.rect.intersection(other.rect).intersection(self.dirty_rect.union(other.dirty_rect)).intersection(clip_rect);
 
         if target_rect.w == 0 || target_rect.h == 0 {
             return false;
@@ -254,10 +253,10 @@ impl Layer {
 impl Image {
     pub fn new(w: u32, h: u32) -> Self {
         let mut layers = Vec::new();
-        layers.push(Layer::new(ImageRect::new(0, 0, w, h)));
+        let rect = ImageRect::new(0, 0, w, h);
+        layers.push(Layer::new(rect));
         Self {
-            w,
-            h,
+            rect,
             layers,
         }
     }
@@ -266,8 +265,12 @@ impl Image {
         let mut layers = Vec::new();
         layers.push(Layer::from_path(0, 0, path)?);
         Ok(Self {
-            w: layers[0].rect.w,
-            h: layers[0].rect.h,
+            rect: ImageRect::new(
+                0,
+                0,
+                layers[0].rect.w,
+                layers[0].rect.h,
+            ),
             layers,
         })
     }
@@ -299,17 +302,17 @@ impl Image {
         // TODO
     }
 
-    pub fn blend(&self) -> Layer {
-        let mut base = Layer::new(ImageRect::new(0, 0, self.w, self.h));
+    pub fn blend(&self, clip_rect: ImageRect) -> Layer {
+        let mut base = Layer::new(self.rect);
         for layer in &self.layers {
-            base.blend(layer);
+            base.blend(layer, clip_rect);
         }
         base
     }
 
     pub fn raw_data(&self) -> Vec<u8> {
 
-        let blended = self.blend();
+        let blended = self.blend(self.rect);
 
         let mut raw_data = vec![0; blended.rect.w as usize * blended.rect.h as usize * 4];
         for y in 0..blended.rect.h {
@@ -325,9 +328,41 @@ impl Image {
         return raw_data;
     }
 
+    pub fn partial_data(&self, rect: ImageRect) -> Vec<u8> {
+        let blended = self.blend(rect);
+        let mut raw_data = vec![0; rect.w as usize * rect.h as usize * 4];
+        for y in rect.y..rect.y+rect.h as i32 {
+            for x in rect.x..rect.x+rect.w as i32 {
+                let si = (y - rect.y) as usize * rect.w as usize + (x - rect.x) as usize;
+                let di = y as usize * blended.rect.w as usize + x as usize;
+                let color = blended.data[di];
+                raw_data[si * 4 + 0] = (color.r * 255.0) as u8;
+                raw_data[si * 4 + 1] = (color.g * 255.0) as u8;
+                raw_data[si * 4 + 2] = (color.b * 255.0) as u8;
+                raw_data[si * 4 + 3] = (color.a * 255.0) as u8;
+
+            }
+        }
+        return raw_data;
+    }
+
+    pub fn dirty_rect(&self) -> ImageRect {
+        let mut dirty_rect = ImageRect::new(0, 0, 0, 0);
+        for layer in &self.layers {
+            dirty_rect = dirty_rect.union(layer.dirty_rect);
+        }
+        dirty_rect
+    }
+
+    pub fn clear_dirty(&mut self) {
+        for layer in &mut self.layers {
+            layer.clear_dirty_rect();
+        }
+    }
+
     pub fn save(&self, path: &Path) -> Result<(), ()> {
 
-        let blended = self.blend();
+        let blended = self.blend(self.rect);
         let mut image = RgbaImage::from_pixel(blended.rect.w, blended.rect.h, [255, 255, 255, 255].into());
         for y in 0..blended.rect.h {
             for x in 0..blended.rect.w {
