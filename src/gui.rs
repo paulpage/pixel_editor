@@ -116,7 +116,7 @@ impl Widget<Option<String>> for ConfirmationDialog {
             // *mouse_intercepted = self.rect.contains_point(input.mouse_x as i32, input.mouse_y as i32) && input.mouse_left_down || *mouse_intercepted;
             for button in &mut self.buttons {
                 if button.update(mouse_intercepted) {
-                    println!("yah");
+                    println!("yah from {}", self.message);
                     return Some(button.text.clone());
                 }
             }

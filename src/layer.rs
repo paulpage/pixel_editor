@@ -363,10 +363,12 @@ impl Image {
     pub fn save(&self, path: &Path) -> Result<(), ()> {
 
         let blended = self.blend(self.rect);
+        println!("save self rect {:?}", self.rect);
         let mut image = RgbaImage::from_pixel(blended.rect.w, blended.rect.h, [255, 255, 255, 255].into());
         for y in 0..blended.rect.h {
             for x in 0..blended.rect.w {
                 let color = blended.get_pixel(x as i32, y as i32).unwrap();
+                println!("color {:?}", color);
                 image.put_pixel(x as u32, y as u32, [
                     (color.r * 255.0) as u8,
                     (color.g * 255.0) as u8,
@@ -375,6 +377,7 @@ impl Image {
                 ].into());
             }
         }
+        println!("done saving");
 
         match image.save(path) {
             Ok(()) => Ok(()),
