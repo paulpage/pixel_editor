@@ -7,17 +7,13 @@ enum SizeKind {
     PercentOfParent,
     TextContent,
     ChildrenSum,
-}
-#[derive(Default)]
-struct AxisSize {
-    kind: SizeKind,
-    value: f32,
-    strictness: f32,
+    ChildrenMax,
 }
 #[derive(Default)]
 struct Size {
-    x: AxisSize,
-    y: AxisSize,
+    kind: SizeKind,
+    value: f32,
+    strictness: f32,
 }
 
 #[allow(non_upper_case_globals, non_snake_case)]
@@ -44,11 +40,12 @@ struct Widget {
 
     // Basic info
     name: String,
-    size: Size,
+    size: [Size; 2],
     flags: u64,
     layout: Layout,
 
     // Computed values
+    computed_size: [f32; 2],
     computed_rect: Rect,
     // computed_rel_position: Vec2,
     // computed_size: Vec2,
@@ -65,8 +62,8 @@ pub enum Layout {
     #[default]
     Null,
     Floating,
-    Rows(i32),
-    Columns(i32),
+    Row,
+    Column,
 }
 
 #[derive(Default)]
@@ -77,8 +74,10 @@ pub struct Ui {
     font: Option<Font>,
     next_floating_window_pos: Vec2,
     font_size: f32,
-    color_text: Color,
+    border_size: f32,
     color_background: Color,
+    color_border: Color,
+    color_text: Color,
 }
 
 impl Ui {
@@ -90,24 +89,27 @@ impl Ui {
             next_floating_window_pos: Vec2::new(20.0, 40.0),
             font: Some(app::load_ttf_font_from_bytes(&data).unwrap()),
             font_size: 20.0,
+            border_size: 2.0,
+            color_background: app::GRAY,
+            color_border: app::GREEN,
             color_text: app::WHITE,
             ..Default::default()
         };
 
         ui.widgets.push(Widget {
             name: "ROOT".to_string(),
-            size: Size {
-                x: AxisSize {
+            size: [
+                Size {
                     kind: SizeKind::PercentOfParent,
                     value: 100.0,
                     strictness: 0.0,
                 },
-                y: AxisSize {
+                Size {
                     kind: SizeKind::PercentOfParent,
                     value: 100.0,
                     strictness: 0.0,
                 },
-            },
+            ],
             layout: Layout::Floating,
             ..Default::default()
         });
@@ -157,20 +159,59 @@ impl Ui {
     }
 
     pub fn push_layout(&mut self, name: &str, layout: Layout) -> Interaction {
+        let size = match layout {
+            Layout::Null => [
+                Size {
+                    kind: SizeKind::PercentOfParent,
+                    value: 100.0,
+                    strictness: 0.0,
+                },
+                Size {
+                    kind: SizeKind::PercentOfParent,
+                    value: 100.0,
+                    strictness: 0.0,
+                },
+            ],
+            Layout::Floating => [
+                Size {
+                    kind: SizeKind::PercentOfParent,
+                    value: 100.0,
+                    strictness: 0.0,
+                },
+                Size {
+                    kind: SizeKind::PercentOfParent,
+                    value: 100.0,
+                    strictness: 0.0,
+                },
+            ],
+            Layout::Row => [
+                Size {
+                    kind: SizeKind::PercentOfParent,
+                    value: 100.0,
+                    strictness: 1.0,
+                },
+                Size {
+                    kind: SizeKind::PercentOfParent,
+                    value: 100.0,
+                    strictness: 0.0,
+                },
+            ],
+            Layout::Column => [
+                Size {
+                    kind: SizeKind::PercentOfParent,
+                    value: 100.0,
+                    strictness: 0.0,
+                },
+                Size {
+                    kind: SizeKind::PercentOfParent,
+                    value: 100.0,
+                    strictness: 1.0,
+                },
+            ],
+        };
         let (new_id, interaction) = self.check_widget(Widget {
             name: name.to_string(),
-            size: Size {
-                x: AxisSize {
-                    kind: SizeKind::PercentOfParent,
-                    value: 100.0,
-                    strictness: 0.0,
-                },
-                y: AxisSize {
-                    kind: SizeKind::PercentOfParent,
-                    value: 100.0,
-                    strictness: 0.0,
-                },
-            },
+            size: size,
             layout: layout,
             ..Default::default()
         });
@@ -194,47 +235,225 @@ impl Ui {
         let (_, interaction) = self.check_widget(Widget {
             id: self.widgets.len(),
             name: name.to_string(),
-            size: Size {
-                x: AxisSize {
+            size: [
+                Size {
                     kind: SizeKind::TextContent,
                     value: 0.0,
                     strictness: 1.0,
                 },
-                y: AxisSize {
+                Size {
                     kind: SizeKind::TextContent,
                     value: 0.0,
                     strictness: 1.0,
                 },
-            },
+            ],
             flags: WidgetFlags::Clickable | WidgetFlags::DrawBorder | WidgetFlags::DrawText,
             ..Default::default()
         });
         interaction
     }
 
-    pub fn update_node(&mut self, id: usize, level: usize) {
-        let offset = Vec2::new(0.0, 0.0);
+    pub fn spacer(&mut self, name: &str) -> Interaction {
+        let (_, interaction) = self.check_widget(Widget {
+            id: self.widgets.len(),
+            name: name.to_string(),
+            size: [
+                Size {
+                    kind: SizeKind::PercentOfParent,
+                    value: 100.0,
+                    strictness: 0.0,
+                },
+                Size {
+                    kind: SizeKind::PercentOfParent,
+                    value: 100.0,
+                    strictness: 0.0,
+                },
+            ],
+            flags: 0,
+            ..Default::default()
+        });
+        interaction
+    }
+
+    fn calc_parent_dependent(&mut self, id: usize, level: usize) {
+        for i in 0..2 {
+            match self.widgets[id].size[i].kind {
+                SizeKind::PercentOfParent => {
+                    let parent = self.widgets[id].parent;
+                    let percent = self.widgets[id].size[i].value / 100.0;
+                    self.widgets[id].computed_size[i] = self.widgets[parent].computed_size[i] * percent;
+                }
+                _ => {}
+            }
+        }
+        println!("{}parent_dep - {} - {:?}", " ".repeat(level), self.widgets[id].name, self.widgets[id].computed_size);
 
         for i in 0..self.widgets[id].children.len() {
             let child_id = self.widgets[id].children[i];
+            self.calc_parent_dependent(child_id, level + 1);
+        }
+    }
 
-            let text_dimensions = self.measure_text(&self.widgets[child_id].name);
-            self.widgets[child_id].computed_rect = Rect {
-                x: offset.x,
-                y: offset.y - text_dimensions.offset_y,
-                w: text_dimensions.width,
-                h: text_dimensions.height,
+    fn calc_child_dependent(&mut self, id: usize, level: usize) {
+        for i in 0..self.widgets[id].children.len() {
+            let child_id = self.widgets[id].children[i];
+            self.calc_child_dependent(child_id, level + 1);
+
+            for j in 0..2 {
+                match self.widgets[id].size[j].kind {
+                    SizeKind::ChildrenSum => {
+                        self.widgets[id].computed_size[j] += self.widgets[child_id].computed_size[j];
+                    }
+                    SizeKind::ChildrenMax => {
+                        println!("have a child for {} j={} : {} <? {}", self.widgets[id].name, j, self.widgets[id].computed_size[j], self.widgets[child_id].computed_size[j]);
+                        if self.widgets[id].computed_size[j] < self.widgets[child_id].computed_size[j] {
+                            println!("actually updating child");
+                            self.widgets[id].computed_size[j] = self.widgets[child_id].computed_size[j];
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+        }
+        println!("{}child_dep: {} {:?}", " ".repeat(level), self.widgets[id].name, self.widgets[id].computed_size);
+    }
+
+    fn calc_violations(&mut self, id: usize, level: usize) {
+
+        for i in 0..self.widgets[id].children.len() {
+            let child_id = self.widgets[id].children[i];
+            self.calc_violations(child_id, level + 1);
+        }
+
+        for j in 0..2 {
+            let mut total = 0.0;
+            for i in 0..self.widgets[id].children.len() {
+                let child_id = self.widgets[id].children[i];
+                total += self.widgets[child_id].computed_size[j];
+            }
+            println!("violations total for {} j={}: {}", self.widgets[id].name, j, total);
+            if total > self.widgets[id].computed_size[j] {
+                let difference = total - self.widgets[id].computed_size[j];
+                println!("violations UH-OHHHHHH  for {} j={}: {} over", self.widgets[id].name, j, difference);
+                let mut available = 0.0;
+                for i in 0..self.widgets[id].children.len() {
+                    let child_id = self.widgets[id].children[i];
+                    available += self.widgets[child_id].computed_size[j] * (1.0 - self.widgets[child_id].size[j].strictness);
+                }
+
+                let shrink_multiplier = difference / available;
+                if shrink_multiplier > 1.0 {
+                    println!("WARNING: Not enough to shrink");
+                } else {
+                    for i in 0..self.widgets[id].children.len() {
+                        let child_id = self.widgets[id].children[i];
+                        let available = self.widgets[child_id].computed_size[j] * (1.0 - self.widgets[child_id].size[j].strictness);
+                        println!("FIXXXX {} for {} j={} shrink {} to {}", self.widgets[child_id].name, self.widgets[id].name, j, self.widgets[child_id].computed_size[j], self.widgets[child_id].computed_size[j] - available * shrink_multiplier);
+                        self.widgets[child_id].computed_size[j] -= available * shrink_multiplier;
+                    }
+                }
+
+            }
+        }
+
+        println!("{}violations: {} {:?}", " ".repeat(level), self.widgets[id].name, self.widgets[id].computed_size);
+    }
+
+    fn calc_positions(&mut self, id: usize, level: usize, pos: Vec2) {
+        let mut child_pos = pos;
+        for i in 0..self.widgets[id].children.len() {
+            let child_id = self.widgets[id].children[i];
+            self.calc_positions(child_id, level + 1, child_pos);
+            match self.widgets[id].layout {
+                Layout::Null => {},
+                Layout::Floating => {},
+                Layout::Row => {
+                    child_pos.x += self.widgets[child_id].computed_size[0];
+                },
+                Layout::Column => {
+                    child_pos.y += self.widgets[child_id].computed_size[1];
+                },
+            }
+        }
+
+        let parent = self.widgets[id].parent;
+        self.widgets[id].rect = Rect {
+            x: pos.x,
+            y: pos.y,
+            w: self.widgets[id].computed_size[0],
+            h: self.widgets[id].computed_size[1],
+        };
+    }
+
+    pub fn draw_node(&mut self, id: usize, level: usize) {
+        println!("{}draw {}: {:?}", " ".repeat(level), self.widgets[id].name, self.widgets[id].rect);
+
+        let flags = self.widgets[id].flags;
+        if flags & WidgetFlags::DrawBorder != 0 {
+            app::draw_rect(self.widgets[id].rect, self.color_border);
+            let inside_rect = Rect {
+                x: self.widgets[id].rect.x + self.border_size,
+                y: self.widgets[id].rect.y + self.border_size,
+                w: self.widgets[id].rect.w - self.border_size * 2.0,
+                h: self.widgets[id].rect.h - self.border_size * 2.0,
             };
+            app::draw_rect(inside_rect, self.color_background);
+        } else {
+            app::draw_rect(self.widgets[id].rect, self.color_background);
+        }
 
-            println!("{}Node: {} {:?}", " ".repeat(level), self.widgets[child_id].name, self.widgets[child_id].computed_rect);
+        if flags & WidgetFlags::DrawText != 0 {
+            self.draw_text(&self.widgets[id].name, self.widgets[id].rect.x, self.widgets[id].rect.y);
+        }
 
-            self.update_node(child_id, level + 1);
+        for i in 0..self.widgets[id].children.len() {
+            let child_id = self.widgets[id].children[i];
+            self.draw_node(child_id, level + 1);
         }
     }
 
     pub fn update(&mut self) {
         println!("========================================");
-        self.update_node(self.root, 0);
+        self.widgets[self.root].size = [
+            Size {
+                kind: SizeKind::Pixels,
+                value: app::screen_width(),
+                strictness: 1.0,
+            },
+            Size {
+                kind: SizeKind::Pixels,
+                value: app::screen_height(),
+                strictness: 1.0,
+            }
+        ];
+
+        for i in 0..self.widgets.len() {
+            for j in 0..2 {
+                match self.widgets[i].size[j].kind {
+                    SizeKind::Pixels => {
+                        self.widgets[i].computed_size[j] = self.widgets[i].size[j].value;
+                    }
+                    SizeKind::TextContent => {
+                        let text_dimensions = self.measure_text(&self.widgets[i].name);
+                        let text_size = [text_dimensions.width, text_dimensions.height];
+                        self.widgets[i].computed_size[j] = text_size[j];
+                    }
+                    _ => {}
+                }
+            }
+        }
+        
+        self.calc_parent_dependent(self.root, 0);
+        self.calc_child_dependent(self.root, 0);
+
+        self.calc_violations(self.root, 0);
+        self.calc_positions(self.root, 0, Vec2::new(0.0, 0.0));
+
+        // self.update_node(self.root, 0, Vec2::new(0.0, 0.0));
         println!("Node count: {}", self.widgets.len());
+
+        println!("-------------------------------");
+        self.draw_node(self.root, 0);
     }
 }

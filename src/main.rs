@@ -11,31 +11,51 @@ use ui::{Ui, Layout};
 async fn main() {
     let mut ui = Ui::new();
 
+    // let mut has_updated = false;
+
     loop {
         if app::is_key_pressed(Key::Q) || app::is_key_pressed(Key::Enter) {
             break;
         }
 
-        ui.push_layout("Main Window", Layout::Columns(1));
+        ui.push_layout("Main Window", Layout::Column);
 
-        ui.push_layout("Toolbar", Layout::Rows(1));
+        ui.push_layout("Toolbar", Layout::Row);
         if ui.button("Open").clicked {
             println!("Open");
         }
         if ui.button("Save").clicked {
             println!("Save");
         }
+        ui.spacer("toolbar_spacer");
+        if ui.button("Close").clicked {
+            println!("Close");
+        }
         ui.pop_layout();
 
         ui.push_layout("Viewport", Layout::Floating);
         ui.pop_layout();
 
-        ui.push_layout("Status bar", Layout::Rows(1));
+        ui.push_layout("Status bar", Layout::Row);
+        if ui.button("Open2").clicked {
+            println!("Open2");
+        }
+        if ui.button("Save2").clicked {
+            println!("Save2");
+        }
+        ui.spacer("toolbar_spacer");
+        if ui.button("Close2").clicked {
+            println!("Close2");
+        }
         ui.pop_layout();
 
         ui.pop_layout();
+
 
         ui.update();
+        // if !has_updated || app::is_key_pressed(Key::Space) {
+        //     has_updated = true;
+        // }
 
         app::next_frame().await
     }
