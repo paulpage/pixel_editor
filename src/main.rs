@@ -18,9 +18,9 @@ async fn main() {
             break;
         }
 
-        ui.push_layout("Main Window", Layout::Column);
+        ui.push_layout("Main Window", Layout::Vertical);
 
-        ui.push_layout("Toolbar", Layout::Row);
+        ui.push_layout("Toolbar", Layout::ToolRow);
         if ui.button("Open").clicked {
             println!("Open");
         }
@@ -33,10 +33,12 @@ async fn main() {
         }
         ui.pop_layout();
 
-        ui.push_layout("Viewport", Layout::Floating);
-        ui.pop_layout();
 
-        ui.push_layout("Status bar", Layout::Row);
+        ui.spacer("viewport_spacer");
+        // ui.push_layout("Viewport", Layout::Vertical);
+        // ui.pop_layout();
+
+        ui.push_layout("Status bar", Layout::ToolRow);
         if ui.button("Open2").clicked {
             println!("Open2");
         }
@@ -49,6 +51,15 @@ async fn main() {
         }
         ui.pop_layout();
 
+        ui.pop_layout();
+
+        ui.push_layout("Tool Pane", Layout::Floating);
+        ui.push_layout("Tool columns", Layout::Vertical);
+        ui.button("tool1");
+        ui.button("tool2");
+        ui.button("tool3");
+        ui.button("tool4");
+        ui.pop_layout();
         ui.pop_layout();
 
 

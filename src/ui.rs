@@ -21,7 +21,7 @@ pub mod WidgetFlags {
     pub const DrawText: u64 = 0x01;
     pub const Clickable: u64 = 0x02;
     pub const DrawBorder: u64 = 0x04;
-    // 0x08
+    pub const Movable: u64 = 0x08;
     // 0x10
     // 0x20
     // 0x40
@@ -43,6 +43,10 @@ struct Widget {
     size: [Size; 2],
     flags: u64,
     layout: Layout,
+    requested_pos: Vec2,
+
+    // State
+    dragging: bool,
 
     // Computed values
     computed_size: [f32; 2],
@@ -62,8 +66,10 @@ pub enum Layout {
     #[default]
     Null,
     Floating,
-    Row,
-    Column,
+    Horizontal,
+    Vertical,
+    ToolRow,
+    ToolColumn,
 }
 
 #[derive(Default)]
@@ -75,9 +81,12 @@ pub struct Ui {
     next_floating_window_pos: Vec2,
     font_size: f32,
     border_size: f32,
+    padding: f32,
     color_background: Color,
     color_border: Color,
     color_text: Color,
+    temp_colors: Vec<Color>,
+    temp_color_idx: usize,
 }
 
 impl Ui {
@@ -85,14 +94,27 @@ impl Ui {
 
         let data = std::fs::read("/usr/share/fonts/TTF/DejaVuSans.ttf").unwrap();
 
+        let mut temp_colors = Vec::new();
+        app::rand::srand(1000);
+        for _ in 0..100 {
+            temp_colors.push(Color {
+                r: app::rand::gen_range(0.0, 1.0),
+                g: app::rand::gen_range(0.0, 1.0),
+                b: app::rand::gen_range(0.0, 1.0),
+                a: 1.0,
+            });
+        }
+
         let mut ui = Self {
             next_floating_window_pos: Vec2::new(20.0, 40.0),
             font: Some(app::load_ttf_font_from_bytes(&data).unwrap()),
             font_size: 20.0,
             border_size: 2.0,
+            padding: 5.0,
             color_background: app::GRAY,
             color_border: app::GREEN,
             color_text: app::WHITE,
+            temp_colors,
             ..Default::default()
         };
 
@@ -118,7 +140,7 @@ impl Ui {
     }
 
     fn draw_text(&self, text: &str, x: f32, y: f32) {
-        app::draw_text_ex(text, x, y, app::TextParams {
+        app::draw_text_ex(text, x, y + self.font_size as f32, app::TextParams {
             font_size: self.font_size as u16,
             font_scale: 1.0,
             font: self.font.as_ref(),
@@ -145,7 +167,21 @@ impl Ui {
             let (mouse_x, mouse_y) = app::mouse_position();
             if self.widgets[id].rect.contains(Vec2::new(mouse_x, mouse_y)) && app::is_mouse_left_pressed() {
                 interaction.clicked = true;
+                println!("not start drag {}", self.widgets[id].name);
+                if self.widgets[id].flags & WidgetFlags::Movable != 0 {
+                    println!("start drag");
+                    self.widgets[id].dragging = true;
+                }
             }
+
+            if !app::is_mouse_left_down() {
+                self.widgets[id].dragging = false;
+            }
+
+            if widget.dragging {
+                println!("dragging");
+            }
+
         } else {
             let mut widget = widget;
             widget.id = self.widgets.len();
@@ -174,17 +210,17 @@ impl Ui {
             ],
             Layout::Floating => [
                 Size {
-                    kind: SizeKind::PercentOfParent,
-                    value: 100.0,
+                    kind: SizeKind::ChildrenSum,
+                    value: 0.0,
                     strictness: 0.0,
                 },
                 Size {
-                    kind: SizeKind::PercentOfParent,
-                    value: 100.0,
+                    kind: SizeKind::ChildrenSum,
+                    value: 0.0,
                     strictness: 0.0,
                 },
             ],
-            Layout::Row => [
+            Layout::Horizontal => [
                 Size {
                     kind: SizeKind::PercentOfParent,
                     value: 100.0,
@@ -196,7 +232,7 @@ impl Ui {
                     strictness: 0.0,
                 },
             ],
-            Layout::Column => [
+            Layout::Vertical => [
                 Size {
                     kind: SizeKind::PercentOfParent,
                     value: 100.0,
@@ -208,11 +244,40 @@ impl Ui {
                     strictness: 1.0,
                 },
             ],
+            Layout::ToolRow => [
+                Size {
+                    kind: SizeKind::PercentOfParent,
+                    value: 100.0,
+                    strictness: 1.0,
+                },
+                Size {
+                    kind: SizeKind::ChildrenMax,
+                    value: 0.0,
+                    strictness: 1.0,
+                },
+            ],
+            Layout::ToolColumn => [
+                Size {
+                    kind: SizeKind::ChildrenMax,
+                    value: 0.0,
+                    strictness: 1.0,
+                },
+                Size {
+                    kind: SizeKind::PercentOfParent,
+                    value: 100.0,
+                    strictness: 1.0,
+                },
+            ]
+        };
+        let flags = match layout {
+            Layout::Floating => WidgetFlags::Movable,
+            _ => 0,
         };
         let (new_id, interaction) = self.check_widget(Widget {
             name: name.to_string(),
-            size: size,
-            layout: layout,
+            size,
+            layout,
+            flags,
             ..Default::default()
         });
         self.current_id = new_id;
@@ -286,7 +351,7 @@ impl Ui {
                 _ => {}
             }
         }
-        println!("{}parent_dep - {} - {:?}", " ".repeat(level), self.widgets[id].name, self.widgets[id].computed_size);
+        // println!("{}parent_dep - {} - {:?}", " ".repeat(level), self.widgets[id].name, self.widgets[id].computed_size);
 
         for i in 0..self.widgets[id].children.len() {
             let child_id = self.widgets[id].children[i];
@@ -305,9 +370,9 @@ impl Ui {
                         self.widgets[id].computed_size[j] += self.widgets[child_id].computed_size[j];
                     }
                     SizeKind::ChildrenMax => {
-                        println!("have a child for {} j={} : {} <? {}", self.widgets[id].name, j, self.widgets[id].computed_size[j], self.widgets[child_id].computed_size[j]);
+                        // println!("have a child for {} j={} : {} <? {}", self.widgets[id].name, j, self.widgets[id].computed_size[j], self.widgets[child_id].computed_size[j]);
                         if self.widgets[id].computed_size[j] < self.widgets[child_id].computed_size[j] {
-                            println!("actually updating child");
+                            // println!("actually updating child");
                             self.widgets[id].computed_size[j] = self.widgets[child_id].computed_size[j];
                         }
                     }
@@ -316,7 +381,7 @@ impl Ui {
             }
 
         }
-        println!("{}child_dep: {} {:?}", " ".repeat(level), self.widgets[id].name, self.widgets[id].computed_size);
+        // println!("{}child_dep: {} {:?}", " ".repeat(level), self.widgets[id].name, self.widgets[id].computed_size);
     }
 
     fn calc_violations(&mut self, id: usize, level: usize) {
@@ -332,10 +397,10 @@ impl Ui {
                 let child_id = self.widgets[id].children[i];
                 total += self.widgets[child_id].computed_size[j];
             }
-            println!("violations total for {} j={}: {}", self.widgets[id].name, j, total);
+            // println!("violations total for {} j={}: {}", self.widgets[id].name, j, total);
             if total > self.widgets[id].computed_size[j] {
                 let difference = total - self.widgets[id].computed_size[j];
-                println!("violations UH-OHHHHHH  for {} j={}: {} over", self.widgets[id].name, j, difference);
+                // println!("violations UH-OHHHHHH  for {} j={}: {} over", self.widgets[id].name, j, difference);
                 let mut available = 0.0;
                 for i in 0..self.widgets[id].children.len() {
                     let child_id = self.widgets[id].children[i];
@@ -344,12 +409,16 @@ impl Ui {
 
                 let shrink_multiplier = difference / available;
                 if shrink_multiplier > 1.0 {
-                    println!("WARNING: Not enough to shrink");
+                    for i in 0..self.widgets[id].children.len() {
+                        let child_id = self.widgets[id].children[i];
+                        // TODO figure this out
+                        // println!("WARNING: Not enough to shrink {} children j={} {}/{} > 1.0", self.widgets[id].name, j, difference, available);
+                    }
                 } else {
                     for i in 0..self.widgets[id].children.len() {
                         let child_id = self.widgets[id].children[i];
                         let available = self.widgets[child_id].computed_size[j] * (1.0 - self.widgets[child_id].size[j].strictness);
-                        println!("FIXXXX {} for {} j={} shrink {} to {}", self.widgets[child_id].name, self.widgets[id].name, j, self.widgets[child_id].computed_size[j], self.widgets[child_id].computed_size[j] - available * shrink_multiplier);
+                        // println!("FIXXXX {} for {} j={} shrink {} to {}", self.widgets[child_id].name, self.widgets[id].name, j, self.widgets[child_id].computed_size[j], self.widgets[child_id].computed_size[j] - available * shrink_multiplier);
                         self.widgets[child_id].computed_size[j] -= available * shrink_multiplier;
                     }
                 }
@@ -357,7 +426,7 @@ impl Ui {
             }
         }
 
-        println!("{}violations: {} {:?}", " ".repeat(level), self.widgets[id].name, self.widgets[id].computed_size);
+        // println!("{}violations: {} {:?}", " ".repeat(level), self.widgets[id].name, self.widgets[id].computed_size);
     }
 
     fn calc_positions(&mut self, id: usize, level: usize, pos: Vec2) {
@@ -367,11 +436,19 @@ impl Ui {
             self.calc_positions(child_id, level + 1, child_pos);
             match self.widgets[id].layout {
                 Layout::Null => {},
-                Layout::Floating => {},
-                Layout::Row => {
+                Layout::Floating => {
+                    child_pos = self.widgets[child_id].requested_pos;
+                },
+                Layout::Horizontal => {
                     child_pos.x += self.widgets[child_id].computed_size[0];
                 },
-                Layout::Column => {
+                Layout::Vertical => {
+                    child_pos.y += self.widgets[child_id].computed_size[1];
+                },
+                Layout::ToolRow => {
+                    child_pos.x += self.widgets[child_id].computed_size[0];
+                },
+                Layout::ToolColumn => {
                     child_pos.y += self.widgets[child_id].computed_size[1];
                 },
             }
@@ -387,7 +464,10 @@ impl Ui {
     }
 
     pub fn draw_node(&mut self, id: usize, level: usize) {
-        println!("{}draw {}: {:?}", " ".repeat(level), self.widgets[id].name, self.widgets[id].rect);
+        // println!("{}draw {}: {:?}", " ".repeat(level), self.widgets[id].name, self.widgets[id].rect);
+
+        self.color_background = self.temp_colors[self.temp_color_idx];
+        self.temp_color_idx += 1;
 
         let flags = self.widgets[id].flags;
         if flags & WidgetFlags::DrawBorder != 0 {
@@ -404,7 +484,7 @@ impl Ui {
         }
 
         if flags & WidgetFlags::DrawText != 0 {
-            self.draw_text(&self.widgets[id].name, self.widgets[id].rect.x, self.widgets[id].rect.y);
+            self.draw_text(&self.widgets[id].name, self.widgets[id].rect.x + self.padding, self.widgets[id].rect.y + self.padding);
         }
 
         for i in 0..self.widgets[id].children.len() {
@@ -414,7 +494,7 @@ impl Ui {
     }
 
     pub fn update(&mut self) {
-        println!("========================================");
+        // println!("========================================");
         self.widgets[self.root].size = [
             Size {
                 kind: SizeKind::Pixels,
@@ -436,7 +516,7 @@ impl Ui {
                     }
                     SizeKind::TextContent => {
                         let text_dimensions = self.measure_text(&self.widgets[i].name);
-                        let text_size = [text_dimensions.width, text_dimensions.height];
+                        let text_size = [text_dimensions.width + (self.padding + self.border_size) * 2.0, self.font_size as f32 + (self.padding + self.border_size) * 2.0];
                         self.widgets[i].computed_size[j] = text_size[j];
                     }
                     _ => {}
@@ -451,9 +531,10 @@ impl Ui {
         self.calc_positions(self.root, 0, Vec2::new(0.0, 0.0));
 
         // self.update_node(self.root, 0, Vec2::new(0.0, 0.0));
-        println!("Node count: {}", self.widgets.len());
+        // println!("Node count: {}", self.widgets.len());
 
-        println!("-------------------------------");
+        // println!("-------------------------------");
+        self.temp_color_idx = 0;
         self.draw_node(self.root, 0);
     }
 }
