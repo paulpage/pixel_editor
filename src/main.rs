@@ -53,14 +53,16 @@ async fn main() {
 
         ui.pop_layout();
 
-        ui.push_layout("Tool Pane", Layout::Floating);
-        ui.push_layout("Tool columns", Layout::Vertical);
+        ui.pop_layout();
+        ui.pop_layout();
+
+        ui.push_window("Tool Pane", Rect::new(50.0, 50.0, 100.0, 300.0));
+        // // ui.push_layout("Tool Pane", Layout::Floating);
+        ui.push_layout("Tool columns", Layout::ToolColumn);
         ui.button("tool1");
         ui.button("tool2");
         ui.button("tool3");
         ui.button("tool4");
-        ui.pop_layout();
-        ui.pop_layout();
 
 
         ui.update();
