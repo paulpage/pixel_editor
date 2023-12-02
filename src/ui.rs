@@ -16,6 +16,16 @@ struct Size {
     strictness: f32,
 }
 
+impl Size {
+    pub fn new(kind: SizeKind, value: f32, strictness: f32) -> Self {
+        Self {
+            kind,
+            value,
+            strictness,
+        }
+    }
+}
+
 #[allow(non_upper_case_globals, non_snake_case)]
 pub mod WidgetFlags {
     pub const DrawText: u64 = 0x01;
@@ -362,7 +372,7 @@ impl Window {
 impl Ui {
     pub fn new() -> Self {
 
-        let data = std::fs::read("/usr/share/fonts/TTF/DejaVuSans.ttf").unwrap();
+        let data = std::fs::read("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf").unwrap();
 
         let mut temp_colors = Vec::new();
         app::rand::srand(1000);
@@ -401,16 +411,8 @@ impl Ui {
         ui.windows[0].widgets.push(Widget {
             name: "FIRST_ROOT_WIDGET".to_string(),
             size: [
-                Size {
-                    kind: SizeKind::PercentOfParent,
-                    value: 100.0,
-                    strictness: 0.0,
-                },
-                Size {
-                    kind: SizeKind::PercentOfParent,
-                    value: 100.0,
-                    strictness: 0.0,
-                },
+                Size::new(SizeKind::PercentOfParent, 100.0, 0.0),
+                Size::new(SizeKind::PercentOfParent, 100.0, 0.0),
             ],
             layout: Layout::Floating,
             ..Default::default()
@@ -423,76 +425,28 @@ impl Ui {
         let w = self.current_id;
         let size = match layout {
             Layout::Null => [
-                Size {
-                    kind: SizeKind::PercentOfParent,
-                    value: 100.0,
-                    strictness: 0.0,
-                },
-                Size {
-                    kind: SizeKind::PercentOfParent,
-                    value: 100.0,
-                    strictness: 0.0,
-                },
+                Size::new(SizeKind::PercentOfParent, 100.0, 0.0),
+                Size::new(SizeKind::PercentOfParent, 100.0, 0.0),
             ],
             Layout::Floating => [
-                Size {
-                    kind: SizeKind::ChildrenSum,
-                    value: 0.0,
-                    strictness: 0.0,
-                },
-                Size {
-                    kind: SizeKind::ChildrenSum,
-                    value: 0.0,
-                    strictness: 0.0,
-                },
+                Size::new(SizeKind::ChildrenSum, 0.0, 0.0),
+                Size::new(SizeKind::ChildrenSum, 0.0, 0.0),
             ],
             Layout::Horizontal => [
-                Size {
-                    kind: SizeKind::PercentOfParent,
-                    value: 100.0,
-                    strictness: 1.0,
-                },
-                Size {
-                    kind: SizeKind::PercentOfParent,
-                    value: 100.0,
-                    strictness: 0.0,
-                },
+                Size::new(SizeKind::PercentOfParent, 100.0, 1.0),
+                Size::new(SizeKind::PercentOfParent, 100.0, 0.0),
             ],
             Layout::Vertical => [
-                Size {
-                    kind: SizeKind::PercentOfParent,
-                    value: 100.0,
-                    strictness: 0.0,
-                },
-                Size {
-                    kind: SizeKind::PercentOfParent,
-                    value: 100.0,
-                    strictness: 1.0,
-                },
+                Size::new(SizeKind::PercentOfParent, 100.0, 0.0),
+                Size::new(SizeKind::PercentOfParent, 100.0, 1.0),
             ],
             Layout::ToolRow => [
-                Size {
-                    kind: SizeKind::PercentOfParent,
-                    value: 100.0,
-                    strictness: 1.0,
-                },
-                Size {
-                    kind: SizeKind::ChildrenMax,
-                    value: 0.0,
-                    strictness: 1.0,
-                },
+                Size::new(SizeKind::PercentOfParent, 100.0, 1.0),
+                Size::new(SizeKind::ChildrenMax, 0.0, 1.0),
             ],
             Layout::ToolColumn => [
-                Size {
-                    kind: SizeKind::ChildrenMax,
-                    value: 0.0,
-                    strictness: 1.0,
-                },
-                Size {
-                    kind: SizeKind::PercentOfParent,
-                    value: 100.0,
-                    strictness: 1.0,
-                },
+                Size::new(SizeKind::ChildrenMax, 0.0, 1.0),
+                Size::new(SizeKind::PercentOfParent, 100.0, 1.0),
             ]
         };
         let flags = match layout {
@@ -515,15 +469,6 @@ impl Ui {
         self.windows[w].current_id = self.windows[w].widgets[self.windows[w].current_id].parent;
     }
 
-    pub fn floating_window(&mut self, name: &str) -> Interaction {
-        let w = self.current_id;
-        let (_, interaction) = self.windows[w].check_widget(Widget {
-            // TODO
-            ..Default::default()
-        });
-        interaction
-    }
-
     pub fn button(&mut self, name: &str) -> Interaction {
         let w = self.current_id;
         let id = self.windows[w].widgets.len();
@@ -531,16 +476,8 @@ impl Ui {
             id,
             name: name.to_string(),
             size: [
-                Size {
-                    kind: SizeKind::TextContent,
-                    value: 0.0,
-                    strictness: 1.0,
-                },
-                Size {
-                    kind: SizeKind::TextContent,
-                    value: 0.0,
-                    strictness: 1.0,
-                },
+                Size::new(SizeKind::TextContent, 0.0, 1.0),
+                Size::new(SizeKind::TextContent, 0.0, 1.0),
             ],
             flags: WidgetFlags::Clickable | WidgetFlags::DrawBorder | WidgetFlags::DrawText,
             ..Default::default()
@@ -555,16 +492,8 @@ impl Ui {
             id,
             name: name.to_string(),
             size: [
-                Size {
-                    kind: SizeKind::PercentOfParent,
-                    value: 100.0,
-                    strictness: 0.0,
-                },
-                Size {
-                    kind: SizeKind::PercentOfParent,
-                    value: 100.0,
-                    strictness: 0.0,
-                },
+                Size::new(SizeKind::PercentOfParent, 100.0, 0.0),
+                Size::new(SizeKind::PercentOfParent, 100.0, 0.0),
             ],
             flags: 0,
             ..Default::default()
@@ -592,16 +521,8 @@ impl Ui {
             self.windows[self.current_id].widgets.push(Widget {
                 name: "ANOTHER_ROOT_WIDGET".to_string(),
                 size: [
-                    Size {
-                        kind: SizeKind::Pixels,
-                        value: rect.w,
-                        strictness: 1.0,
-                    },
-                    Size {
-                        kind: SizeKind::Pixels,
-                        value: rect.h,
-                        strictness: 1.0,
-                    },
+                    Size::new(SizeKind::Pixels, rect.w, 1.0),
+                    Size::new(SizeKind::Pixels, rect.h, 1.0),
                 ],
                 layout: Layout::Floating,
                 ..Default::default()
@@ -626,34 +547,13 @@ impl Ui {
 
         // println!("========================================");
         self.windows[0].rect = Rect::new(0.0, 0.0, app::screen_width(), app::screen_height());
-        // self.windows[0].widgets[0].size = [
-        //     Size {
-        //         kind: SizeKind::Pixels,
-        //         value: app::screen_width(),
-        //         strictness: 1.0,
-        //     },
-        //     Size {
-        //         kind: SizeKind::Pixels,
-        //         value: app::screen_height(),
-        //         strictness: 1.0,
-        //     }
-        // ];
 
         for w in 0..self.windows.len() {
 
             let rect = self.windows[w].rect;
             self.windows[w].widgets[0].size = [
-                Size {
-                    kind: SizeKind::Pixels,
-                    value: rect.w,
-                    strictness: 1.0,
-                },
-                Size {
-                    kind: SizeKind::Pixels,
-                    value: rect.h,
-                    strictness: 1.0,
-                }
-
+                Size::new(SizeKind::Pixels, rect.w, 1.0),
+                Size::new(SizeKind::Pixels, rect.h, 1.0),
             ];
 
             self.windows[w].mouse_intercepted = self.mouse_intercepted;
