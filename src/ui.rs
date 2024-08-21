@@ -372,7 +372,8 @@ impl Window {
 impl Ui {
     pub fn new() -> Self {
 
-        let data = std::fs::read("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf").unwrap();
+        // let data = std::fs::read("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf").unwrap();
+        let data = std::fs::read("C:\\windows\\fonts\\arial.ttf").unwrap();
 
         let mut temp_colors = Vec::new();
         app::rand::srand(1000);

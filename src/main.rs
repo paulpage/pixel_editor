@@ -7,11 +7,15 @@ use layer::{Image, Layer, ImageRect};
 mod ui;
 use ui::{Ui, Layout};
 
+struct State {
+    image: Image,
+}
+
 #[macroquad::main("Pixel Editor")]
 async fn main() {
     let mut ui = Ui::new();
 
-    // let mut has_updated = false;
+    let mut has_updated = false;
 
     loop {
         if app::is_key_pressed(Key::Q) || app::is_key_pressed(Key::Enter) {
@@ -149,21 +153,21 @@ async fn main() {
 //         }
 //     }
     
-//     fn screen_to_canvas(&mut self, x: f32, y: f32) -> (i32, i32) {
-//         let layer_x = ((x - self.canvas.x + (self.image.rect.w as f32 * self.canvas_scale / 2.0)) / self.canvas_scale - 0.5).round() as i32 - self.active_layer().rect.x;
-//         let layer_y = ((y - self.canvas.y + (self.image.rect.h as f32 * self.canvas_scale / 2.0)) / self.canvas_scale - 0.5).round() as i32 - self.active_layer().rect.y;
-//         (layer_x, layer_y)
-//     }
+    // fn screen_to_canvas(&mut self, x: f32, y: f32) -> (i32, i32) {
+    //     let layer_x = ((x - self.canvas.x + (self.image.rect.w as f32 * self.canvas_scale / 2.0)) / self.canvas_scale - 0.5).round() as i32 - self.active_layer().rect.x;
+    //     let layer_y = ((y - self.canvas.y + (self.image.rect.h as f32 * self.canvas_scale / 2.0)) / self.canvas_scale - 0.5).round() as i32 - self.active_layer().rect.y;
+    //     (layer_x, layer_y)
+    // }
 
-//     fn center_canvas(&mut self) {
-//         self.canvas.x = self.screen_width / 2.0;
-//         self.canvas.y = self.screen_height / 2.0;
-//     }
+    // fn center_canvas(&mut self) {
+    //     self.canvas.x = self.screen_width / 2.0;
+    //     self.canvas.y = self.screen_height / 2.0;
+    // }
 
-//     fn update_canvas_position(&mut self) {
-//         self.canvas.x += self.canvas_offset_x;
-//         self.canvas.y += self.canvas_offset_y;
-//     }
+    // fn update_canvas_position(&mut self) {
+    //     self.canvas.x += self.canvas_offset_x;
+    //     self.canvas.y += self.canvas_offset_y;
+    // }
 
 //     fn active_layer(&mut self) -> &mut Layer {
 //         &mut self.image.layers[self.active_layer_idx]
@@ -318,21 +322,21 @@ async fn main() {
 //         if app::is_key_pressed(Key::Backslash) {
 //         }
 
-//         if app::is_mouse_middle_pressed() {
-//             let (mouse_x, mouse_y) = app::mouse_position();
-//             state.canvas_offset_baseline_x = mouse_x;
-//             state.canvas_offset_baseline_y = mouse_y;
-//         }
-//         if app::is_mouse_middle_down() {
-//             let (mouse_x, mouse_y) = app::mouse_position();
-//             state.canvas_offset_x = mouse_x - state.canvas_offset_baseline_x;
-//             state.canvas_offset_y = mouse_y - state.canvas_offset_baseline_y;
-//             state.update_canvas_position();
-//             state.canvas_offset_x = 0.0;
-//             state.canvas_offset_y = 0.0;
-//             state.canvas_offset_baseline_x = mouse_x;
-//             state.canvas_offset_baseline_y = mouse_y;
-//         }
+        // if app::is_mouse_middle_pressed() {
+        //     let (mouse_x, mouse_y) = app::mouse_position();
+        //     state.canvas_offset_baseline_x = mouse_x;
+        //     state.canvas_offset_baseline_y = mouse_y;
+        // }
+        // if app::is_mouse_middle_down() {
+        //     let (mouse_x, mouse_y) = app::mouse_position();
+        //     state.canvas_offset_x = mouse_x - state.canvas_offset_baseline_x;
+        //     state.canvas_offset_y = mouse_y - state.canvas_offset_baseline_y;
+        //     state.update_canvas_position();
+        //     state.canvas_offset_x = 0.0;
+        //     state.canvas_offset_y = 0.0;
+        //     state.canvas_offset_baseline_x = mouse_x;
+        //     state.canvas_offset_baseline_y = mouse_y;
+        // }
 
 //         if state.showing_new_dialog {
 //             if let Some(layer) = new_dialog.update(&mut click_intercepted) {
