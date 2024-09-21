@@ -26,19 +26,12 @@ impl Size {
     }
 }
 
-#[allow(non_upper_case_globals, non_snake_case)]
 pub mod WidgetFlags {
-    pub const DrawText: u64 = 0x01;
-    pub const Clickable: u64 = 0x02;
-    pub const DrawBorder: u64 = 0x04;
-    pub const Movable: u64 = 0x08;
-    // 0x10
-    // 0x20
-    // 0x40
-    // 0x80
-    // 0x100
-    // 0x200
-    // ...
+    pub const DRAW_TEXT: u64 = 1 << 0;
+    pub const CLICKABLE: u64 = 1 << 1;
+    pub const DRAW_BORDER: u64 = 1 << 2;
+    pub const MOVABLE: u64 = 1 << 3;
+    pub const INVISIBLE: u64 = 1 << 4;
 }
 
 #[derive(Default)]
@@ -262,34 +255,39 @@ impl Window {
     }
 
     pub fn draw_node(&mut self, id: usize, level: usize, style: &mut StyleInfo) {
+        let flags = self.widgets[id].flags;
+
         // println!("{}draw {}: {:?}", " ".repeat(level), self.widgets[id].name, self.widgets[id].rect);
         // println!("I am {} and my children are {:?}", self.widgets[id].name, self.widgets[id].children);
 
-        style.color_background = style.temp_colors[style.temp_color_idx];
-        style.temp_color_idx = (style.temp_color_idx + 1) % 100;
+        if flags & WidgetFlags::INVISIBLE == 0 {
 
-        let color = if self.widgets[id].hovered {
-            Color::new(0.5, 0.5, 0.5, 1.0)
-        } else {
-            style.color_background
-        };
 
-        let flags = self.widgets[id].flags;
-        if flags & WidgetFlags::DrawBorder != 0 {
-            app::draw_rect(self.widgets[id].rect, style.color_border);
-            let inside_rect = Rect {
-                x: self.widgets[id].rect.x + style.border_size,
-                y: self.widgets[id].rect.y + style.border_size,
-                w: self.widgets[id].rect.w - style.border_size * 2.0,
-                h: self.widgets[id].rect.h - style.border_size * 2.0,
+            style.color_background = style.temp_colors[style.temp_color_idx];
+            style.temp_color_idx = (style.temp_color_idx + 1) % 100;
+
+            let color = if self.widgets[id].hovered && (flags & WidgetFlags::CLICKABLE != 0) {
+                Color::new(0.5, 0.5, 0.5, 1.0)
+            } else {
+                style.color_background
             };
-            app::draw_rect(inside_rect, color);
-        } else {
-            app::draw_rect(self.widgets[id].rect, color);
-        }
 
-        if flags & WidgetFlags::DrawText != 0 {
-            draw_text(&self.widgets[id].name, self.widgets[id].rect.x + style.padding, self.widgets[id].rect.y + style.padding, &style);
+            if flags & WidgetFlags::DRAW_BORDER != 0 {
+                app::draw_rect(self.widgets[id].rect, style.color_border);
+                let inside_rect = Rect {
+                    x: self.widgets[id].rect.x + style.border_size,
+                    y: self.widgets[id].rect.y + style.border_size,
+                    w: self.widgets[id].rect.w - style.border_size * 2.0,
+                    h: self.widgets[id].rect.h - style.border_size * 2.0,
+                };
+                app::draw_rect(inside_rect, color);
+            } else {
+                app::draw_rect(self.widgets[id].rect, color);
+            }
+
+            if flags & WidgetFlags::DRAW_TEXT != 0 {
+                draw_text(&self.widgets[id].name, self.widgets[id].rect.x + style.padding, self.widgets[id].rect.y + style.padding, &style);
+            }
         }
 
         for i in 0..self.widgets[id].children.len() {
@@ -343,7 +341,7 @@ impl Window {
 
             if self.widgets[id].rect.contains(Vec2::new(mouse_x, mouse_y)) && app::is_mouse_left_pressed() {
                 interaction.clicked = true;
-                if self.widgets[id].flags & WidgetFlags::Movable != 0 {
+                if self.widgets[id].flags & WidgetFlags::MOVABLE != 0 {
                     self.widgets[id].dragging = true;
                 }
             }
@@ -373,10 +371,10 @@ impl Ui {
     pub fn new() -> Self {
 
         // let data = std::fs::read("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf").unwrap();
-        let data = std::fs::read("C:\\windows\\fonts\\arial.ttf").unwrap();
+        let data = include_bytes!("../data/fonts/font.ttf");
 
         let mut temp_colors = Vec::new();
-        app::rand::srand(1000);
+        app::rand::srand(1001);
         for _ in 0..100 {
             temp_colors.push(Color {
                 r: app::rand::gen_range(0.0, 1.0),
@@ -387,7 +385,7 @@ impl Ui {
         }
 
         let style = StyleInfo {
-            font: Some(app::load_ttf_font_from_bytes(&data).unwrap()),
+            font: Some(app::load_ttf_font_from_bytes(data).unwrap()),
             font_size: 20.0,
             border_size: 2.0,
             padding: 5.0,
@@ -416,6 +414,7 @@ impl Ui {
                 Size::new(SizeKind::PercentOfParent, 100.0, 0.0),
             ],
             layout: Layout::Floating,
+            flags: WidgetFlags::INVISIBLE,
             ..Default::default()
         });
 
@@ -451,7 +450,10 @@ impl Ui {
             ]
         };
         let flags = match layout {
-            Layout::Floating => WidgetFlags::Movable,
+            Layout::Null => WidgetFlags::INVISIBLE,
+            Layout::Floating => WidgetFlags::MOVABLE | WidgetFlags::INVISIBLE,
+            Layout::Vertical => WidgetFlags::INVISIBLE,
+            Layout::Horizontal => WidgetFlags::INVISIBLE,
             _ => 0,
         };
         let (new_id, interaction) = self.windows[w].check_widget(Widget {
@@ -480,7 +482,7 @@ impl Ui {
                 Size::new(SizeKind::TextContent, 0.0, 1.0),
                 Size::new(SizeKind::TextContent, 0.0, 1.0),
             ],
-            flags: WidgetFlags::Clickable | WidgetFlags::DrawBorder | WidgetFlags::DrawText,
+            flags: WidgetFlags::CLICKABLE | WidgetFlags::DRAW_BORDER | WidgetFlags::DRAW_TEXT,
             ..Default::default()
         });
         interaction
@@ -496,7 +498,7 @@ impl Ui {
                 Size::new(SizeKind::PercentOfParent, 100.0, 0.0),
                 Size::new(SizeKind::PercentOfParent, 100.0, 0.0),
             ],
-            flags: 0,
+            flags: WidgetFlags::INVISIBLE,
             ..Default::default()
         });
         interaction
@@ -526,6 +528,7 @@ impl Ui {
                     Size::new(SizeKind::Pixels, rect.h, 1.0),
                 ],
                 layout: Layout::Floating,
+                flags: WidgetFlags::INVISIBLE,
                 ..Default::default()
             });
         }
