@@ -1,4 +1,4 @@
-use super::app::{self, Key, Color, Rect, Vec2, Font};
+use super::app::{self as g, Key, Color, Rect, Vec2, Font};
 
 #[derive(Default)]
 enum SizeKind {
@@ -114,13 +114,13 @@ pub struct Window {
     zindex: usize,
 }
 
-fn measure_text(text: &str, style: &StyleInfo) -> app::TextDimensions {
-    app::measure_text(text, style.font.as_ref(), style.font_size as u16, 1.0)
+fn measure_text(text: &str, style: &StyleInfo) -> g::TextDimensions {
+    g::measure_text(text, style.font.as_ref(), style.font_size as u16, 1.0)
 }
 
 
 fn draw_text(text: &str, x: f32, y: f32, style: &StyleInfo) {
-    app::draw_text_ex(text, x, y + style.font_size as f32, app::TextParams {
+    g::draw_text_ex(text, x, y + style.font_size as f32, g::TextParams {
         font_size: style.font_size as u16,
         font_scale: 1.0,
         font: style.font.as_ref(),
@@ -263,8 +263,8 @@ impl Window {
         if flags & WidgetFlags::INVISIBLE == 0 {
 
 
-            style.color_background = style.temp_colors[style.temp_color_idx];
-            style.temp_color_idx = (style.temp_color_idx + 1) % 100;
+            //style.color_background = style.temp_colors[style.temp_color_idx];
+            //style.temp_color_idx = (style.temp_color_idx + 1) % 100;
 
             let color = if self.widgets[id].hovered && (flags & WidgetFlags::CLICKABLE != 0) {
                 Color::new(0.5, 0.5, 0.5, 1.0)
@@ -273,16 +273,16 @@ impl Window {
             };
 
             if flags & WidgetFlags::DRAW_BORDER != 0 {
-                app::draw_rect(self.widgets[id].rect, style.color_border);
+                g::draw_rect(self.widgets[id].rect, style.color_border);
                 let inside_rect = Rect {
                     x: self.widgets[id].rect.x + style.border_size,
                     y: self.widgets[id].rect.y + style.border_size,
                     w: self.widgets[id].rect.w - style.border_size * 2.0,
                     h: self.widgets[id].rect.h - style.border_size * 2.0,
                 };
-                app::draw_rect(inside_rect, color);
+                g::draw_rect(inside_rect, color);
             } else {
-                app::draw_rect(self.widgets[id].rect, color);
+                g::draw_rect(self.widgets[id].rect, color);
             }
 
             if flags & WidgetFlags::DRAW_TEXT != 0 {
@@ -305,7 +305,7 @@ impl Window {
             self.calc_input(child_id, level + 1, mouse_intercepted);
         }
 
-        let (mouse_x, mouse_y) = app::mouse_position();
+        let (mouse_x, mouse_y) = g::mouse_position();
 
         // println!("{} widget rect {:?} window rect {:?} mouse {}, {}", self.widgets[id].name, self.widgets[id].rect, self.rect, mouse_x, mouse_y);
         let rect = Rect {
@@ -333,20 +333,20 @@ impl Window {
         }
 
         if let Some(id) = target_id {
-            let (mouse_x, mouse_y) = app::mouse_position();
+            let (mouse_x, mouse_y) = g::mouse_position();
 
             if self.widgets[id].rect.contains(Vec2::new(mouse_x, mouse_y)) {
                 interaction.hovered = true;
             }
 
-            if self.widgets[id].rect.contains(Vec2::new(mouse_x, mouse_y)) && app::is_mouse_left_pressed() {
+            if self.widgets[id].rect.contains(Vec2::new(mouse_x, mouse_y)) && g::is_mouse_left_pressed() {
                 interaction.clicked = true;
                 if self.widgets[id].flags & WidgetFlags::MOVABLE != 0 {
                     self.widgets[id].dragging = true;
                 }
             }
 
-            if !app::is_mouse_left_down() {
+            if !g::is_mouse_left_down() {
                 self.widgets[id].dragging = false;
             }
 
@@ -374,24 +374,24 @@ impl Ui {
         let data = include_bytes!("../data/fonts/font.ttf");
 
         let mut temp_colors = Vec::new();
-        app::rand::srand(1001);
+        g::rand::srand(1001);
         for _ in 0..100 {
             temp_colors.push(Color {
-                r: app::rand::gen_range(0.0, 1.0),
-                g: app::rand::gen_range(0.0, 1.0),
-                b: app::rand::gen_range(0.0, 1.0),
+                r: g::rand::gen_range(0.0, 1.0),
+                g: g::rand::gen_range(0.0, 1.0),
+                b: g::rand::gen_range(0.0, 1.0),
                 a: 1.0,
             });
         }
 
         let style = StyleInfo {
-            font: Some(app::load_ttf_font_from_bytes(data).unwrap()),
+            font: Some(g::load_ttf_font_from_bytes(data).unwrap()),
             font_size: 20.0,
             border_size: 2.0,
             padding: 5.0,
-            color_background: app::GRAY,
-            color_border: app::GREEN,
-            color_text: app::WHITE,
+            color_background: g::DARKGRAY,
+            color_border: g::GREEN,
+            color_text: g::WHITE,
             temp_colors,
             ..Default::default()
         };
@@ -420,6 +420,19 @@ impl Ui {
 
         ui
     }
+
+    // ============================================================
+
+    pub fn push_style(&mut self, style: StyleInfo) {
+    }
+
+    pub fn pop_style(&mut self) {
+    }
+
+    pub fn temp_style(&mut self, style: StyleInfo) {
+    }
+
+    // ============================================================
 
     pub fn push_layout(&mut self, name: &str, layout: Layout) -> Interaction {
         let w = self.current_id;
@@ -550,7 +563,7 @@ impl Ui {
         self.style.temp_color_idx = 0;
 
         // println!("========================================");
-        self.windows[0].rect = Rect::new(0.0, 0.0, app::screen_width(), app::screen_height());
+        self.windows[0].rect = Rect::new(0.0, 0.0, g::screen_width(), g::screen_height());
 
         for w in 0..self.windows.len() {
 
