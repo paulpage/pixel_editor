@@ -40,12 +40,12 @@ impl State {
         Self {
             image: Image::new(800, 600),
             active_layer_idx: 0,
-            canvas: Rect::new(100.0, 100.0, 800.0, 600.0),
+            canvas: rect!(100, 100, 800, 600),
             canvas_scale: 2.0,
-            canvas_offset: Vec2::new(0.0, 0.0),
-            canvas_offset_baseline: Vec2::new(0.0, 0.0),
+            canvas_offset: vec2!(0, 0),
+            canvas_offset_baseline: vec2!(0, 0),
             active_color: g::BLACK,
-            active_tool: "Pencil".into(),
+            active_tool: "Paintbrush".into(),
             currently_drawing: false,
             showing_new_dialog: false,
             showing_open_dialog: false,
@@ -53,7 +53,7 @@ impl State {
             error_text: "".into(),
             screen_width: 0.0,
             screen_height: 0.0,
-            mouse_old: Vec2::new(0.0, 0.0),
+            mouse_old: vec2!(0, 0),
         }
     }
 
@@ -80,7 +80,7 @@ impl State {
 }
 
 fn draw_tool_pane(ui: &mut Ui, state: &mut State) {
-    ui.push_window("Tool Pane", Rect::new(50.0, 50.0, 100.0, 300.0));
+    ui.push_window("Tool Pane", rect!(50, 50, 100, 300));
     // // ui.push_layout("Tool Pane", Layout::Floating);
     ui.push_layout("Tool columns", Layout::ToolColumn);
 
@@ -93,7 +93,7 @@ fn draw_tool_pane(ui: &mut Ui, state: &mut State) {
     ];
     for tool in &tools {
         if state.active_tool == *tool {
-            temp_style!(ui, background_color: Color::new(255.0 / 255.0, 255.0 / 255.0, 0.0 / 255.0, 255.0 / 255.0));
+            temp_style!(ui, background_color: color!(255, 255, 0));
         }
         if ui.button(tool).clicked {
             state.active_tool = String::from(*tool);
@@ -102,44 +102,44 @@ fn draw_tool_pane(ui: &mut Ui, state: &mut State) {
 }
 
 fn draw_color_selector(ui: &mut Ui, state: &mut State) {
-    ui.push_window("Color Selector", Rect::new(200.0, 50.0, 100.0, 300.0));
+    ui.push_window("Color Selector", rect!(200, 50, 100, 300));
     ui.push_layout("Color columns", Layout::ToolColumn);
 
     let colors = [
-        Color::new(0.0 / 255.0, 0.0 / 255.0, 0.0 / 255.0, 1.0),
-        Color::new(70.0 / 255.0, 70.0 / 255.0, 70.0 / 255.0, 1.0),
-        Color::new(120.0 / 255.0, 120.0 / 255.0, 120.0 / 255.0, 1.0),
-        Color::new(153.0 / 255.0, 0.0 / 255.0, 48.0 / 255.0, 1.0),
-        Color::new(237.0 / 255.0, 28.0 / 255.0, 36.0 / 255.0, 1.0),
-        Color::new(255.0 / 255.0, 126.0 / 255.0, 0.0 / 255.0, 1.0),
-        Color::new(255.0 / 255.0, 194.0 / 255.0, 14.0 / 255.0, 1.0),
-        Color::new(255.0 / 255.0, 242.0 / 255.0, 0.0 / 255.0, 1.0),
-        Color::new(168.0 / 255.0, 230.0 / 255.0, 29.0 / 255.0, 1.0),
-        Color::new(34.0 / 255.0, 177.0 / 255.0, 76.0 / 255.0, 1.0),
-        Color::new(0.0 / 255.0, 183.0 / 255.0, 239.0 / 255.0, 1.0),
-        Color::new(77.0 / 255.0, 109.0 / 255.0, 243.0 / 255.0, 1.0),
-        Color::new(47.0 / 255.0, 54.0 / 255.0, 153.0 / 255.0, 1.0),
-        Color::new(111.0 / 255.0, 49.0 / 255.0, 152.0 / 255.0, 1.0),
-        Color::new(255.0 / 255.0, 255.0 / 255.0, 255.0 / 255.0, 1.0),
-        Color::new(220.0 / 255.0, 220.0 / 255.0, 220.0 / 255.0, 1.0),
-        Color::new(180.0 / 255.0, 180.0 / 255.0, 180.0 / 255.0, 1.0),
-        Color::new(156.0 / 255.0, 90.0 / 255.0, 60.0 / 255.0, 1.0),
-        Color::new(255.0 / 255.0, 163.0 / 255.0, 177.0 / 255.0, 1.0),
-        Color::new(229.0 / 255.0, 170.0 / 255.0, 122.0 / 255.0, 1.0),
-        Color::new(145.0 / 255.0, 228.0 / 255.0, 156.0 / 255.0, 1.0),
-        Color::new(255.0 / 255.0, 249.0 / 255.0, 189.0 / 255.0, 1.0),
-        Color::new(211.0 / 255.0, 249.0 / 255.0, 188.0 / 255.0, 1.0),
-        Color::new(157.0 / 255.0, 187.0 / 255.0, 97.0 / 255.0, 1.0),
-        Color::new(153.0 / 255.0, 217.0 / 255.0, 234.0 / 255.0, 1.0),
-        Color::new(112.0 / 255.0, 154.0 / 255.0, 209.0 / 255.0, 1.0),
-        Color::new(84.0 / 255.0, 109.0 / 255.0, 142.0 / 255.0, 1.0),
-        Color::new(181.0 / 255.0, 165.0 / 255.0, 213.0 / 255.0, 1.0),
+        color!(0, 0, 0),
+        color!(70, 70, 70),
+        color!(120, 120, 120),
+        color!(153, 0, 48),
+        color!(237, 28, 36),
+        color!(255, 126, 0),
+        color!(255, 194, 14),
+        color!(255, 242, 0),
+        color!(168, 230, 29),
+        color!(34, 177, 76),
+        color!(0, 183, 239),
+        color!(77, 109, 243),
+        color!(47, 54, 153),
+        color!(111, 49, 152),
+        color!(255, 255, 255),
+        color!(220, 220, 220),
+        color!(180, 180, 180),
+        color!(156, 90, 60),
+        color!(255, 163, 177),
+        color!(229, 170, 122),
+        color!(145, 228, 156),
+        color!(255, 249, 189),
+        color!(211, 249, 188),
+        color!(157, 187, 97),
+        color!(153, 217, 234),
+        color!(112, 154, 209),
+        color!(84, 109, 142),
+        color!(181, 165, 213),
     ];
 
     for color in &colors {
         temp_style!(ui, background_color: *color);
         if state.active_color == *color {
-            temp_style!(ui, border_color: Color::new(255.0 / 255.0, 255.0 / 255.0, 0.0 / 255.0, 255.0 / 255.0));
+            temp_style!(ui, border_color: color!(255, 255, 0));
         }
         let hash = format!("##{:?}", color);
         if ui.button(&hash).clicked {
@@ -159,13 +159,13 @@ async fn main() {
     let mut state = State::new();
     state.image.layers.push(Layer::new(ImageRect::new(0, 0, 800, 600)));
     state.active_layer_idx = 1;
-    state.active_layer().fill(0, 0, Color::new(1.0, 0.0, 0.0, 1.0));
+    state.active_layer().fill(0, 0, color!(255, 0, 0));
     state.image.layers.push(Layer::new(ImageRect::new(0, 0, 800, 600)));
     state.active_layer_idx = 2;
-    state.active_layer().fill(0, 0, Color::new(0.0, 1.0, 0.0, 1.0));
+    state.active_layer().fill(0, 0, color!(0, 255, 0));
     state.image.layers.push(Layer::new(ImageRect::new(0, 0, 800, 600)));
     state.active_layer_idx = 3;
-    state.active_layer().fill(0, 0, Color::new(0.0, 0.0, 1.0, 1.0));
+    state.active_layer().fill(0, 0, color!(0, 0, 255));
 
     let mut texture = g::Texture2D::from_rgba8(state.image.rect.w as u16, state.image.rect.h as u16, &state.image.raw_data());
     let mut click_intercepted = false;
@@ -197,12 +197,8 @@ async fn main() {
 
         ui.push_layout("Status bar", Layout::ToolRow);
 
-        //ui.push_style(StyleInfo {
-        //    background_color: Color::new(0.0, 0.5, 0.0, 1.0),
-        //    ..Default::default()
-        //});
         push_style!(ui,
-            background_color: Color::new(0.0, 0.5, 0.0, 1.0),
+            background_color: color!(0, 128, 0),
         );
         if ui.button("Open2").clicked {
             println!("Open2");
@@ -228,10 +224,10 @@ async fn main() {
 
         //////////////
 
-        g::clear_background(Color::new(50.0 / 255.0, 50.0 / 255.0, 50.0 / 255.0, 255.0 / 255.0));
-        let rect = Rect::new(0.0, 0.0, state.image.rect.w as f32, state.image.rect.h as f32);
+        g::clear_background(color!(50, 50, 50));
+        let rect = rect!(0, 0, state.image.rect.w, state.image.rect.h);
         let src_rect = rect;
-        let dest_rect = Rect::new(
+        let dest_rect = rect!(
             state.canvas.x - (rect.w * state.canvas_scale as f32 / 2.0).round(),
             state.canvas.y - (rect.h * state.canvas_scale as f32 / 2.0).round(),
             rect.w * state.canvas_scale as f32,
@@ -254,7 +250,7 @@ async fn main() {
 
         texture.set_filter(g::FilterMode::Nearest);
         g::draw_texture_ex(&texture, dest_rect.x, dest_rect.y, g::WHITE, g::DrawTextureParams {
-            dest_size: Some(Vec2::new(dest_rect.w, dest_rect.h)),
+            dest_size: Some(vec2!(dest_rect.w, dest_rect.h)),
             source: Some(src_rect),
             ..Default::default()
         });
@@ -320,12 +316,12 @@ async fn main() {
             state.canvas_scale *= (10.0 + wheel_y) / 10.0;
             state.update_canvas_position();
         }
-        if (g::is_mouse_left_down() && !click_intercepted) || state.currently_drawing {
+        if (g::is_mouse_left_down() && !ui.mouse_intercepted) || state.currently_drawing {
             state.currently_drawing = true;
             let color = state.active_color;
 
             let (mouse_x, mouse_y) = g::mouse_position();
-            let (x, y) = state.screen_to_canvas(Vec2::new(mouse_x, mouse_y));
+            let (x, y) = state.screen_to_canvas(vec2!(mouse_x, mouse_y));
             let (old_x, old_y) = state.screen_to_canvas(state.mouse_old);
 
             match state.active_tool.as_str() {
@@ -342,7 +338,6 @@ async fn main() {
                 "Color Picker" => {
                     if let Some(color) = state.active_layer().get_pixel(x, y) {
                         state.active_color = color;
-                        //color_selector.set_active_color(color);
                     }
                 }
                 "Paint Bucket" => {
@@ -365,50 +360,6 @@ async fn main() {
         // let mut test_dialog = Dialog::new("Test Dialog");
         //let mut layer_dialog = Dialog::new("Layers");
         //
-        //let mut color_selector = ColorSelector::new(
-        //    Rect::new(5.0, 50.0, 50.0, 1000.0),
-        //    vec![
-        //        Color::new(0.0 / 255.0, 0.0 / 255.0, 0.0 / 255.0, 1.0),
-        //        Color::new(70.0 / 255.0, 70.0 / 255.0, 70.0 / 255.0, 1.0),
-        //        Color::new(120.0 / 255.0, 120.0 / 255.0, 120.0 / 255.0, 1.0),
-        //        Color::new(153.0 / 255.0, 0.0 / 255.0, 48.0 / 255.0, 1.0),
-        //        Color::new(237.0 / 255.0, 28.0 / 255.0, 36.0 / 255.0, 1.0),
-        //        Color::new(255.0 / 255.0, 126.0 / 255.0, 0.0 / 255.0, 1.0),
-        //        Color::new(255.0 / 255.0, 194.0 / 255.0, 14.0 / 255.0, 1.0),
-        //        Color::new(255.0 / 255.0, 242.0 / 255.0, 0.0 / 255.0, 1.0),
-        //        Color::new(168.0 / 255.0, 230.0 / 255.0, 29.0 / 255.0, 1.0),
-        //        Color::new(34.0 / 255.0, 177.0 / 255.0, 76.0 / 255.0, 1.0),
-        //        Color::new(0.0 / 255.0, 183.0 / 255.0, 239.0 / 255.0, 1.0),
-        //        Color::new(77.0 / 255.0, 109.0 / 255.0, 243.0 / 255.0, 1.0),
-        //        Color::new(47.0 / 255.0, 54.0 / 255.0, 153.0 / 255.0, 1.0),
-        //        Color::new(111.0 / 255.0, 49.0 / 255.0, 152.0 / 255.0, 1.0),
-        //        Color::new(255.0 / 255.0, 255.0 / 255.0, 255.0 / 255.0, 1.0),
-        //        Color::new(220.0 / 255.0, 220.0 / 255.0, 220.0 / 255.0, 1.0),
-        //        Color::new(180.0 / 255.0, 180.0 / 255.0, 180.0 / 255.0, 1.0),
-        //        Color::new(156.0 / 255.0, 90.0 / 255.0, 60.0 / 255.0, 1.0),
-        //        Color::new(255.0 / 255.0, 163.0 / 255.0, 177.0 / 255.0, 1.0),
-        //        Color::new(229.0 / 255.0, 170.0 / 255.0, 122.0 / 255.0, 1.0),
-        //        Color::new(145.0 / 255.0, 228.0 / 255.0, 156.0 / 255.0, 1.0),
-        //        Color::new(255.0 / 255.0, 249.0 / 255.0, 189.0 / 255.0, 1.0),
-        //        Color::new(211.0 / 255.0, 249.0 / 255.0, 188.0 / 255.0, 1.0),
-        //        Color::new(157.0 / 255.0, 187.0 / 255.0, 97.0 / 255.0, 1.0),
-        //        Color::new(153.0 / 255.0, 217.0 / 255.0, 234.0 / 255.0, 1.0),
-        //        Color::new(112.0 / 255.0, 154.0 / 255.0, 209.0 / 255.0, 1.0),
-        //        Color::new(84.0 / 255.0, 109.0 / 255.0, 142.0 / 255.0, 1.0),
-        //        Color::new(181.0 / 255.0, 165.0 / 255.0, 213.0 / 255.0, 1.0),
-        //    ],
-        //);
-        //
-        //    let mut tool_selector = ToolSelector::new(
-        //        Rect::new(60.0, 50.0, 120.0, 300.0),
-        //        vec![
-        //        "Pencil".into(),
-        //        "Paintbrush".into(),
-        //        "Color Picker".into(),
-        //        "Paint Bucket".into(),
-        //        "Spray Can".into(),
-        //        ],
-        //    );
         //    let mut new_dialog = NewDialog::new(500.0, 500.0, 800.0, 600.0);
         //    let mut open_dialog = OpenDialog::new(500.0, 500.0, "test_image.png".to_string());
         //    let mut save_dialog = SaveDialog::new(500.0, 500.0, "test_image.png".to_string());
@@ -453,10 +404,6 @@ async fn main() {
         //            if save_button.update(&mut click_intercepted) {
         //                state.showing_save_dialog = true;
         //            }
-        //
-        //            state.active_color = color_selector.update(&mut click_intercepted);
-        //            state.active_tool = tool_selector.update(&mut click_intercepted);
-        //
         //        }
         //
         //
@@ -557,7 +504,8 @@ async fn main() {
         //        }
         //
         //
-        //g::draw_text(&state.error_text, 5.0, g::screen_height() - 30.0, 20.0, Color::new(1.0, 0.0, 0.0, 1.0));
+        //g::draw_text(&state.error_text, 5.0, g::screen_height() - 30.0, 20.0,
+        //color!(255, 0, 0));
 
         let (x, y) = g::mouse_position();
         state.mouse_old.x = x;

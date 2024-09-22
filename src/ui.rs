@@ -1,4 +1,5 @@
 use super::app::{self as g, Key, Color, Rect, Vec2, Font};
+use crate::{color, rect, vec2};
 
 // ============================================================
 
@@ -124,7 +125,7 @@ pub struct Ui {
 
     // State
     next_floating_window_pos: Vec2,
-    mouse_intercepted: bool,
+    pub mouse_intercepted: bool,
 }
 
 #[derive(Default)]
@@ -304,7 +305,7 @@ impl Window {
         if flags & WidgetFlags::INVISIBLE == 0 {
 
             let color = if self.widgets[id].hovered && (flags & WidgetFlags::CLICKABLE != 0) {
-                Color::new(0.5, 0.5, 0.5, 1.0)
+                color!(128, 128, 128)
             } else {
                 style.background_color
             };
@@ -352,11 +353,11 @@ impl Window {
             w: self.widgets[id].rect.w,
             h: self.widgets[id].rect.h,
         };
-        // if !self.mouse_intercepted && self.widgets[id].rect.contains(Vec2::new(self.rect.x + mouse_x, self.rect.y + mouse_y)) {
-        if !(self.mouse_intercepted || mouse_intercepted) && rect.contains(Vec2::new(mouse_x, mouse_y)) {
+        // if !self.mouse_intercepted && self.widgets[id].rect.contains(vec2!(self.rect.x + mouse_x, self.rect.y + mouse_y)) {
+        if !(self.mouse_intercepted || mouse_intercepted) && rect.contains(vec2!(mouse_x, mouse_y)) && (self.widgets[id].flags & WidgetFlags::INVISIBLE) == 0 {
             self.widgets[id].hovered = true;
             self.mouse_intercepted = true;
-            // println!("INTERCEPTED: {} rect {:?}", self.widgets[id].name, self.widgets[id].rect);
+             //println!("INTERCEPTED: {} rect {:?}", self.widgets[id].name, self.widgets[id].rect);
         }
     }
 
@@ -373,11 +374,11 @@ impl Window {
         if let Some(id) = target_id {
             let (mouse_x, mouse_y) = g::mouse_position();
 
-            if self.widgets[id].rect.contains(Vec2::new(mouse_x, mouse_y)) {
+            if self.widgets[id].rect.contains(vec2!(mouse_x, mouse_y)) {
                 interaction.hovered = true;
             }
 
-            if self.widgets[id].rect.contains(Vec2::new(mouse_x, mouse_y)) && g::is_mouse_left_pressed() {
+            if self.widgets[id].rect.contains(vec2!(mouse_x, mouse_y)) && g::is_mouse_left_pressed() {
                 interaction.clicked = true;
                 if self.widgets[id].flags & WidgetFlags::MOVABLE != 0 {
                     self.widgets[id].dragging = true;
@@ -432,7 +433,7 @@ impl Ui {
         };
 
         let mut ui = Self {
-            next_floating_window_pos: Vec2::new(20.0, 40.0),
+            next_floating_window_pos: vec2!(20, 40),
             style: style.clone(),
             ..Default::default()
         };
@@ -607,7 +608,7 @@ impl Ui {
         self.mouse_intercepted = false;
 
         // println!("========================================");
-        self.windows[0].rect = Rect::new(0.0, 0.0, g::screen_width(), g::screen_height());
+        self.windows[0].rect = rect!(0.0, 0.0, g::screen_width(), g::screen_height());
 
         for w in 0..self.windows.len() {
 
@@ -643,7 +644,7 @@ impl Ui {
             self.windows[w].calc_child_dependent(0, 0);
 
             self.windows[w].calc_violations(0, 0);
-            self.windows[w].calc_positions(0, 0, Vec2::new(0.0, 0.0));
+            self.windows[w].calc_positions(0, 0, vec2!(0, 0));
         }
 
         for w in (0..self.windows.len()).rev() {

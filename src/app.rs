@@ -2,6 +2,42 @@ pub use macroquad::prelude::*;
 pub use macroquad::prelude::KeyCode as Key;
 pub use macroquad::prelude::MouseButton as Button;
 
+#[macro_export]
+macro_rules! rect(
+    ($x:expr, $y:expr, $w:expr, $h:expr $(,)?) => (
+        Rect::new($x as f32, $y as f32, $w as f32, $h as f32)
+    )
+);
+
+#[macro_export]
+macro_rules! vec2(
+    ($x:expr, $y:expr $(,)?) => (
+        Vec2::new($x as f32, $y as f32)
+    )
+);
+
+
+#[macro_export]
+macro_rules! color(
+    ($r:expr, $g:expr, $b:expr, $a:expr $(,)?) => (
+        Color::new(
+            $r as f32 / 255.0,
+            $g as f32 / 255.0,
+            $b as f32 / 255.0,
+            $a as f32 / 255.0,
+        )
+    );
+
+    ($r:expr, $g:expr, $b:expr $(,)?) => (
+        Color::new(
+            $r as f32 / 255.0,
+            $g as f32 / 255.0,
+            $b as f32 / 255.0,
+            1.0,
+        )
+    );
+);
+
 pub fn draw_rect(rect: Rect, color: Color) {
     draw_rectangle(rect.x, rect.y, rect.w, rect.h, color);
 }
