@@ -1,5 +1,31 @@
 use super::app::{self as g, Key, Color, Rect, Vec2, Font};
 
+// ============================================================
+
+#[macro_export]
+macro_rules! temp_style {
+    ($ui:expr, $($field:ident: $value: expr),* $(,)?) => {{
+        let mut style = $ui.get_current_style();
+        $(
+            style.$field = $value;
+        )*
+        $ui.set_temp_style(style);
+    }};
+}
+
+#[macro_export]
+macro_rules! push_style {
+    ($ui:expr, $($field:ident: $value: expr),* $(,)?) => {{
+        let mut style = $ui.get_current_style();
+        $(
+            style.$field = $value;
+        )*
+        $ui.push_style(style);
+    }};
+}
+
+// ============================================================
+
 #[derive(Default)]
 enum SizeKind {
     #[default]
@@ -47,6 +73,7 @@ struct Widget {
     flags: u64,
     layout: Layout,
     requested_pos: Vec2,
+    style: StyleInfo,
 
     // State
     dragging: bool,
@@ -77,15 +104,13 @@ pub enum Layout {
 
 #[derive(Default, Clone)]
 pub struct StyleInfo {
-    font: Option<Font>,
-    font_size: f32,
-    border_size: f32,
-    padding: f32,
-    color_background: Color,
-    color_border: Color,
-    color_text: Color,
-    temp_colors: Vec<Color>,
-    temp_color_idx: usize,
+    pub font: Option<Font>,
+    pub font_size: f32,
+    pub border_size: f32,
+    pub padding: f32,
+    pub color_background: Color,
+    pub color_border: Color,
+    pub color_text: Color,
 }
 
 #[derive(Default)]
@@ -106,6 +131,10 @@ pub struct Ui {
 pub struct Window {
     pub name: String,
     pub rect: Rect,
+
+    // Style
+    styles: Vec<StyleInfo>,
+    temp_style_info: Option<StyleInfo>,
 
     widgets: Vec<Widget>,
     current_id: usize,
@@ -254,17 +283,16 @@ impl Window {
         };
     }
 
-    pub fn draw_node(&mut self, id: usize, level: usize, style: &mut StyleInfo) {
+    pub fn draw_node(&mut self, id: usize, level: usize, style: &StyleInfo) {
+
+        let style = self.widgets[id].style.clone();
+
         let flags = self.widgets[id].flags;
 
         // println!("{}draw {}: {:?}", " ".repeat(level), self.widgets[id].name, self.widgets[id].rect);
         // println!("I am {} and my children are {:?}", self.widgets[id].name, self.widgets[id].children);
 
         if flags & WidgetFlags::INVISIBLE == 0 {
-
-
-            //style.color_background = style.temp_colors[style.temp_color_idx];
-            //style.temp_color_idx = (style.temp_color_idx + 1) % 100;
 
             let color = if self.widgets[id].hovered && (flags & WidgetFlags::CLICKABLE != 0) {
                 Color::new(0.5, 0.5, 0.5, 1.0)
@@ -292,7 +320,7 @@ impl Window {
 
         for i in 0..self.widgets[id].children.len() {
             let child_id = self.widgets[id].children[i];
-            self.draw_node(child_id, level + 1, style);
+            self.draw_node(child_id, level + 1, &style);
         }
     }
 
@@ -363,6 +391,14 @@ impl Window {
             self.widgets.push(widget);
         }
 
+        self.widgets[target_id.unwrap()].style = if let Some(style) = self.temp_style_info.clone() {
+            let style = style.clone();
+            self.temp_style_info = None;
+            style
+        } else {
+            self.styles[self.styles.len() - 1].clone()
+        };
+
         (target_id.unwrap(), interaction)
     }
 }
@@ -373,16 +409,6 @@ impl Ui {
         // let data = std::fs::read("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf").unwrap();
         let data = include_bytes!("../data/fonts/font.ttf");
 
-        let mut temp_colors = Vec::new();
-        g::rand::srand(1001);
-        for _ in 0..100 {
-            temp_colors.push(Color {
-                r: g::rand::gen_range(0.0, 1.0),
-                g: g::rand::gen_range(0.0, 1.0),
-                b: g::rand::gen_range(0.0, 1.0),
-                a: 1.0,
-            });
-        }
 
         let style = StyleInfo {
             font: Some(g::load_ttf_font_from_bytes(data).unwrap()),
@@ -392,18 +418,18 @@ impl Ui {
             color_background: g::DARKGRAY,
             color_border: g::GREEN,
             color_text: g::WHITE,
-            temp_colors,
             ..Default::default()
         };
 
         let mut ui = Self {
             next_floating_window_pos: Vec2::new(20.0, 40.0),
-            style,
+            style: style.clone(),
             ..Default::default()
         };
 
         let window = Window {
             name: "FIRST_ROOT_WINDOW".to_string(),
+            styles: vec![style],
             ..Default::default()
         };
         ui.windows.push(window);
@@ -423,13 +449,21 @@ impl Ui {
 
     // ============================================================
 
+    pub fn get_current_style(&self) -> StyleInfo {
+        let window = &self.windows[self.current_id];
+        window.styles[window.styles.len() - 1].clone()
+    }
+
     pub fn push_style(&mut self, style: StyleInfo) {
+        self.windows[self.current_id].styles.push(style);
     }
 
     pub fn pop_style(&mut self) {
+        self.windows[self.current_id].styles.pop();
     }
 
-    pub fn temp_style(&mut self, style: StyleInfo) {
+    pub fn set_temp_style(&mut self, style: StyleInfo) {
+        self.windows[self.current_id].temp_style_info = Some(style);
     }
 
     // ============================================================
@@ -551,6 +585,7 @@ impl Ui {
         self.check_window(Window {
             name: name.to_string(),
             rect,
+            styles: vec![self.style.clone()],
             // style: self.style.clone(),
             ..Default::default()
         });
@@ -560,7 +595,6 @@ impl Ui {
 
         self.current_id = 0;
         self.mouse_intercepted = false;
-        self.style.temp_color_idx = 0;
 
         // println!("========================================");
         self.windows[0].rect = Rect::new(0.0, 0.0, g::screen_width(), g::screen_height());
@@ -611,7 +645,6 @@ impl Ui {
         for w in 0..self.windows.len() {
             for i in 0..self.windows[w].widgets.len() {
                 // println!("-------------------------------");
-                self.style.temp_color_idx = 0;
                 self.windows[w].draw_node(0, 0, &mut self.style);
             }
         }

@@ -5,7 +5,7 @@ mod layer;
 use layer::{Image, Layer, ImageRect};
 
 mod ui;
-use ui::{Ui, Layout};
+use ui::{Ui, Layout, StyleInfo};
 
 // use std::path::Path;
 // use nfd::Response as FileDialogResponse;
@@ -127,12 +127,23 @@ async fn main() {
         // ui.pop_layout();
 
         ui.push_layout("Status bar", Layout::ToolRow);
+
+
+        //ui.push_style(StyleInfo {
+        //    color_background: Color::new(0.0, 0.5, 0.0, 1.0),
+        //    ..Default::default()
+        //});
+        push_style!(ui,
+            color_background: Color::new(0.0, 0.5, 0.0, 1.0),
+        );
         if ui.button("Open2").clicked {
             println!("Open2");
         }
         if ui.button("Save2").clicked {
             println!("Save2");
         }
+        ui.pop_style();
+
         ui.spacer("toolbar_spacer");
         if ui.button("Close2").clicked {
             println!("Close2");
@@ -148,6 +159,11 @@ async fn main() {
         // // ui.push_layout("Tool Pane", Layout::Floating);
         ui.push_layout("Tool columns", Layout::ToolColumn);
         ui.button("Pencil");
+        temp_style!(ui,
+            color_background: Color::new(0.5, 0.0, 0.0, 1.0),
+        );
+
+
         ui.button("Paintbrush");
         ui.button("Color Picker");
         ui.button("Paint Bucket");
