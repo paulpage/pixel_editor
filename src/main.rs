@@ -23,8 +23,8 @@ struct State {
     canvas_scale: f32,
     canvas_offset: Vec2,
     canvas_offset_baseline: Vec2,
-    selected_color: Color,
-    selected_tool: String,
+    active_color: Color,
+    active_tool: String,
     currently_drawing: bool,
     showing_new_dialog: bool,
     showing_open_dialog: bool,
@@ -44,8 +44,8 @@ impl State {
             canvas_scale: 2.0,
             canvas_offset: Vec2::new(0.0, 0.0),
             canvas_offset_baseline: Vec2::new(0.0, 0.0),
-            selected_color: g::BLACK,
-            selected_tool: "Pencil".into(),
+            active_color: g::BLACK,
+            active_tool: "Pencil".into(),
             currently_drawing: false,
             showing_new_dialog: false,
             showing_open_dialog: false,
@@ -77,6 +77,75 @@ impl State {
      fn active_layer(&mut self) -> &mut Layer {
          &mut self.image.layers[self.active_layer_idx]
      }
+}
+
+fn draw_tool_pane(ui: &mut Ui, state: &mut State) {
+    ui.push_window("Tool Pane", Rect::new(50.0, 50.0, 100.0, 300.0));
+    // // ui.push_layout("Tool Pane", Layout::Floating);
+    ui.push_layout("Tool columns", Layout::ToolColumn);
+
+    let tools = [
+        "Pencil",
+        "Paintbrush",
+        "Color Picker",
+        "Paint Bucket",
+        "Spray Can",
+    ];
+    for tool in &tools {
+        if state.active_tool == *tool {
+            temp_style!(ui, background_color: Color::new(255.0 / 255.0, 255.0 / 255.0, 0.0 / 255.0, 255.0 / 255.0));
+        }
+        if ui.button(tool).clicked {
+            state.active_tool = String::from(*tool);
+        }
+    }
+}
+
+fn draw_color_selector(ui: &mut Ui, state: &mut State) {
+    ui.push_window("Color Selector", Rect::new(200.0, 50.0, 100.0, 300.0));
+    ui.push_layout("Color columns", Layout::ToolColumn);
+
+    let colors = [
+        Color::new(0.0 / 255.0, 0.0 / 255.0, 0.0 / 255.0, 1.0),
+        Color::new(70.0 / 255.0, 70.0 / 255.0, 70.0 / 255.0, 1.0),
+        Color::new(120.0 / 255.0, 120.0 / 255.0, 120.0 / 255.0, 1.0),
+        Color::new(153.0 / 255.0, 0.0 / 255.0, 48.0 / 255.0, 1.0),
+        Color::new(237.0 / 255.0, 28.0 / 255.0, 36.0 / 255.0, 1.0),
+        Color::new(255.0 / 255.0, 126.0 / 255.0, 0.0 / 255.0, 1.0),
+        Color::new(255.0 / 255.0, 194.0 / 255.0, 14.0 / 255.0, 1.0),
+        Color::new(255.0 / 255.0, 242.0 / 255.0, 0.0 / 255.0, 1.0),
+        Color::new(168.0 / 255.0, 230.0 / 255.0, 29.0 / 255.0, 1.0),
+        Color::new(34.0 / 255.0, 177.0 / 255.0, 76.0 / 255.0, 1.0),
+        Color::new(0.0 / 255.0, 183.0 / 255.0, 239.0 / 255.0, 1.0),
+        Color::new(77.0 / 255.0, 109.0 / 255.0, 243.0 / 255.0, 1.0),
+        Color::new(47.0 / 255.0, 54.0 / 255.0, 153.0 / 255.0, 1.0),
+        Color::new(111.0 / 255.0, 49.0 / 255.0, 152.0 / 255.0, 1.0),
+        Color::new(255.0 / 255.0, 255.0 / 255.0, 255.0 / 255.0, 1.0),
+        Color::new(220.0 / 255.0, 220.0 / 255.0, 220.0 / 255.0, 1.0),
+        Color::new(180.0 / 255.0, 180.0 / 255.0, 180.0 / 255.0, 1.0),
+        Color::new(156.0 / 255.0, 90.0 / 255.0, 60.0 / 255.0, 1.0),
+        Color::new(255.0 / 255.0, 163.0 / 255.0, 177.0 / 255.0, 1.0),
+        Color::new(229.0 / 255.0, 170.0 / 255.0, 122.0 / 255.0, 1.0),
+        Color::new(145.0 / 255.0, 228.0 / 255.0, 156.0 / 255.0, 1.0),
+        Color::new(255.0 / 255.0, 249.0 / 255.0, 189.0 / 255.0, 1.0),
+        Color::new(211.0 / 255.0, 249.0 / 255.0, 188.0 / 255.0, 1.0),
+        Color::new(157.0 / 255.0, 187.0 / 255.0, 97.0 / 255.0, 1.0),
+        Color::new(153.0 / 255.0, 217.0 / 255.0, 234.0 / 255.0, 1.0),
+        Color::new(112.0 / 255.0, 154.0 / 255.0, 209.0 / 255.0, 1.0),
+        Color::new(84.0 / 255.0, 109.0 / 255.0, 142.0 / 255.0, 1.0),
+        Color::new(181.0 / 255.0, 165.0 / 255.0, 213.0 / 255.0, 1.0),
+    ];
+
+    for color in &colors {
+        temp_style!(ui, background_color: *color);
+        if state.active_color == *color {
+            temp_style!(ui, border_color: Color::new(255.0 / 255.0, 255.0 / 255.0, 0.0 / 255.0, 255.0 / 255.0));
+        }
+        let hash = format!("##{:?}", color);
+        if ui.button(&hash).clicked {
+            state.active_color = *color;
+        }
+    }
 }
 
 #[macroquad::main("Pixel Editor")]
@@ -128,13 +197,12 @@ async fn main() {
 
         ui.push_layout("Status bar", Layout::ToolRow);
 
-
         //ui.push_style(StyleInfo {
-        //    color_background: Color::new(0.0, 0.5, 0.0, 1.0),
+        //    background_color: Color::new(0.0, 0.5, 0.0, 1.0),
         //    ..Default::default()
         //});
         push_style!(ui,
-            color_background: Color::new(0.0, 0.5, 0.0, 1.0),
+            background_color: Color::new(0.0, 0.5, 0.0, 1.0),
         );
         if ui.button("Open2").clicked {
             println!("Open2");
@@ -155,19 +223,8 @@ async fn main() {
         ui.pop_layout();
         ui.pop_layout();
 
-        ui.push_window("Tool Pane", Rect::new(50.0, 50.0, 100.0, 300.0));
-        // // ui.push_layout("Tool Pane", Layout::Floating);
-        ui.push_layout("Tool columns", Layout::ToolColumn);
-        ui.button("Pencil");
-        temp_style!(ui,
-            color_background: Color::new(0.5, 0.0, 0.0, 1.0),
-        );
-
-
-        ui.button("Paintbrush");
-        ui.button("Color Picker");
-        ui.button("Paint Bucket");
-        ui.button("Spray Can");
+        draw_tool_pane(&mut ui, &mut state);
+        draw_color_selector(&mut ui, &mut state);
 
         //////////////
 
@@ -265,13 +322,13 @@ async fn main() {
         }
         if (g::is_mouse_left_down() && !click_intercepted) || state.currently_drawing {
             state.currently_drawing = true;
-            let color = state.selected_color;
+            let color = state.active_color;
 
             let (mouse_x, mouse_y) = g::mouse_position();
             let (x, y) = state.screen_to_canvas(Vec2::new(mouse_x, mouse_y));
             let (old_x, old_y) = state.screen_to_canvas(state.mouse_old);
 
-            match state.selected_tool.as_str() {
+            match state.active_tool.as_str() {
                 "Pencil" => state.active_layer().draw_line(old_x, old_y, x, y, color),
                 "Paintbrush" => {
                     for dx in -10..=10 {
@@ -284,8 +341,8 @@ async fn main() {
                 }
                 "Color Picker" => {
                     if let Some(color) = state.active_layer().get_pixel(x, y) {
-                        state.selected_color = color;
-                        //color_selector.set_selected_color(color);
+                        state.active_color = color;
+                        //color_selector.set_active_color(color);
                     }
                 }
                 "Paint Bucket" => {
@@ -397,8 +454,8 @@ async fn main() {
         //                state.showing_save_dialog = true;
         //            }
         //
-        //            state.selected_color = color_selector.update(&mut click_intercepted);
-        //            state.selected_tool = tool_selector.update(&mut click_intercepted);
+        //            state.active_color = color_selector.update(&mut click_intercepted);
+        //            state.active_tool = tool_selector.update(&mut click_intercepted);
         //
         //        }
         //

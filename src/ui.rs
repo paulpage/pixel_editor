@@ -108,9 +108,9 @@ pub struct StyleInfo {
     pub font_size: f32,
     pub border_size: f32,
     pub padding: f32,
-    pub color_background: Color,
-    pub color_border: Color,
-    pub color_text: Color,
+    pub background_color: Color,
+    pub border_color: Color,
+    pub text_color: Color,
 }
 
 #[derive(Default)]
@@ -143,6 +143,15 @@ pub struct Window {
     zindex: usize,
 }
 
+fn get_display_text(text: &str) -> &str {
+    if let Some(i) = text.rfind("##") {
+        let (display_text, _) = text.split_at(i);
+        display_text
+    } else {
+        text
+    }
+}
+
 fn measure_text(text: &str, style: &StyleInfo) -> g::TextDimensions {
     g::measure_text(text, style.font.as_ref(), style.font_size as u16, 1.0)
 }
@@ -153,7 +162,7 @@ fn draw_text(text: &str, x: f32, y: f32, style: &StyleInfo) {
         font_size: style.font_size as u16,
         font_scale: 1.0,
         font: style.font.as_ref(),
-        color: style.color_text,
+        color: style.text_color,
         ..Default::default()
     });
 }
@@ -297,11 +306,11 @@ impl Window {
             let color = if self.widgets[id].hovered && (flags & WidgetFlags::CLICKABLE != 0) {
                 Color::new(0.5, 0.5, 0.5, 1.0)
             } else {
-                style.color_background
+                style.background_color
             };
 
             if flags & WidgetFlags::DRAW_BORDER != 0 {
-                g::draw_rect(self.widgets[id].rect, style.color_border);
+                g::draw_rect(self.widgets[id].rect, style.border_color);
                 let inside_rect = Rect {
                     x: self.widgets[id].rect.x + style.border_size,
                     y: self.widgets[id].rect.y + style.border_size,
@@ -314,7 +323,8 @@ impl Window {
             }
 
             if flags & WidgetFlags::DRAW_TEXT != 0 {
-                draw_text(&self.widgets[id].name, self.widgets[id].rect.x + style.padding, self.widgets[id].rect.y + style.padding, &style);
+                let display_text = get_display_text(&self.widgets[id].name);
+                draw_text(&display_text, self.widgets[id].rect.x + style.padding, self.widgets[id].rect.y + style.padding, &style);
             }
         }
 
@@ -415,9 +425,9 @@ impl Ui {
             font_size: 20.0,
             border_size: 2.0,
             padding: 5.0,
-            color_background: g::DARKGRAY,
-            color_border: g::GREEN,
-            color_text: g::WHITE,
+            background_color: g::DARKGRAY,
+            border_color: g::GREEN,
+            text_color: g::WHITE,
             ..Default::default()
         };
 
@@ -619,7 +629,8 @@ impl Ui {
                             self.windows[w].widgets[i].computed_size[j] = self.windows[w].widgets[i].size[j].value;
                         }
                         SizeKind::TextContent => {
-                            let text_dimensions = measure_text(&self.windows[w].widgets[i].name, &self.style);
+                            let display_text = get_display_text(&self.windows[w].widgets[i].name);
+                            let text_dimensions = measure_text(display_text, &self.style);
                             let text_size = [text_dimensions.width + (self.style.padding + self.style.border_size) * 2.0, self.style.font_size as f32 + (self.style.padding + self.style.border_size) * 2.0];
                             self.windows[w].widgets[i].computed_size[j] = text_size[j];
                         }
