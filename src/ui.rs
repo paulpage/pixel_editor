@@ -59,6 +59,7 @@ pub mod WidgetFlags {
     pub const DRAW_BORDER: u64 = 1 << 2;
     pub const MOVABLE: u64 = 1 << 3;
     pub const INVISIBLE: u64 = 1 << 4;
+    pub const EDIT_TEXT: u64 = 1 << 5;
 }
 
 #[derive(Default)]
@@ -79,17 +80,22 @@ struct Widget {
     // State
     dragging: bool,
     hovered: bool,
+    interaction: Interaction,
 
     // Computed values
     computed_size: [f32; 2],
     computed_rect: Rect,
     rect: Rect,
+
+    // Content
+    content_str: String,
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Interaction {
     pub clicked: bool,
     pub hovered: bool,
+    pub dragging: bool,
 }
 
 #[derive(Default)]
@@ -126,6 +132,8 @@ pub struct Ui {
     // State
     next_floating_window_pos: Vec2,
     pub mouse_intercepted: bool,
+    pub keyboard_intercepted: bool,
+    keyboard_id: usize,
 }
 
 #[derive(Default)]
@@ -169,6 +177,11 @@ fn draw_text(text: &str, x: f32, y: f32, style: &StyleInfo) {
 }
 
 impl Window {
+
+    fn push_widget(&mut self, widget: Widget) {
+        self.widgets[self.current_id].children.push(widget.id);
+        self.widgets.push(widget);
+    }
 
     fn calc_parent_dependent(&mut self, id: usize, level: usize) {
         for i in 0..2 {
@@ -292,126 +305,6 @@ impl Window {
             h: self.widgets[id].computed_size[1],
         };
     }
-
-    pub fn draw_node(&mut self, id: usize, level: usize, style: &StyleInfo) {
-
-        let style = self.widgets[id].style.clone();
-
-        let flags = self.widgets[id].flags;
-
-        // println!("{}draw {}: {:?}", " ".repeat(level), self.widgets[id].name, self.widgets[id].rect);
-        // println!("I am {} and my children are {:?}", self.widgets[id].name, self.widgets[id].children);
-
-        if flags & WidgetFlags::INVISIBLE == 0 {
-
-            let color = if self.widgets[id].hovered && (flags & WidgetFlags::CLICKABLE != 0) {
-                color!(128, 128, 128)
-            } else {
-                style.background_color
-            };
-
-            if flags & WidgetFlags::DRAW_BORDER != 0 {
-                g::draw_rect(self.widgets[id].rect, style.border_color);
-                let inside_rect = Rect {
-                    x: self.widgets[id].rect.x + style.border_size,
-                    y: self.widgets[id].rect.y + style.border_size,
-                    w: self.widgets[id].rect.w - style.border_size * 2.0,
-                    h: self.widgets[id].rect.h - style.border_size * 2.0,
-                };
-                g::draw_rect(inside_rect, color);
-            } else {
-                g::draw_rect(self.widgets[id].rect, color);
-            }
-
-            if flags & WidgetFlags::DRAW_TEXT != 0 {
-                let display_text = get_display_text(&self.widgets[id].name);
-                draw_text(&display_text, self.widgets[id].rect.x + style.padding, self.widgets[id].rect.y + style.padding, &style);
-            }
-        }
-
-        for i in 0..self.widgets[id].children.len() {
-            let child_id = self.widgets[id].children[i];
-            self.draw_node(child_id, level + 1, &style);
-        }
-    }
-
-    pub fn calc_input(&mut self, id: usize, level: usize, mouse_intercepted: bool) {
-
-        self.widgets[id].hovered = false;
-
-        for i in 0..self.widgets[id].children.len() {
-            let child_id = self.widgets[id].children[i];
-            self.calc_input(child_id, level + 1, mouse_intercepted);
-        }
-
-        let (mouse_x, mouse_y) = g::mouse_position();
-
-        // println!("{} widget rect {:?} window rect {:?} mouse {}, {}", self.widgets[id].name, self.widgets[id].rect, self.rect, mouse_x, mouse_y);
-        let rect = Rect {
-            x: self.widgets[id].rect.x,
-            y: self.widgets[id].rect.y,
-            w: self.widgets[id].rect.w,
-            h: self.widgets[id].rect.h,
-        };
-        // if !self.mouse_intercepted && self.widgets[id].rect.contains(vec2!(self.rect.x + mouse_x, self.rect.y + mouse_y)) {
-        if !(self.mouse_intercepted || mouse_intercepted) && rect.contains(vec2!(mouse_x, mouse_y)) && (self.widgets[id].flags & WidgetFlags::INVISIBLE) == 0 {
-            self.widgets[id].hovered = true;
-            self.mouse_intercepted = true;
-             //println!("INTERCEPTED: {} rect {:?}", self.widgets[id].name, self.widgets[id].rect);
-        }
-    }
-
-    fn check_widget(&mut self, widget: Widget) -> (usize, Interaction) {
-        let mut interaction = Interaction::default();
-
-        let mut target_id = None;
-        for widget_id in &self.widgets[self.current_id].children {
-            if self.widgets[*widget_id].name == widget.name {
-                target_id = Some(*widget_id);
-            }
-        }
-
-        if let Some(id) = target_id {
-            let (mouse_x, mouse_y) = g::mouse_position();
-
-            if self.widgets[id].rect.contains(vec2!(mouse_x, mouse_y)) {
-                interaction.hovered = true;
-            }
-
-            if self.widgets[id].rect.contains(vec2!(mouse_x, mouse_y)) && g::is_mouse_left_pressed() {
-                interaction.clicked = true;
-                if self.widgets[id].flags & WidgetFlags::MOVABLE != 0 {
-                    self.widgets[id].dragging = true;
-                }
-            }
-
-            if !g::is_mouse_left_down() {
-                self.widgets[id].dragging = false;
-            }
-
-            if widget.dragging {
-                println!("dragging");
-            }
-
-        } else {
-            let mut widget = widget;
-            widget.id = self.widgets.len();
-            widget.parent = self.current_id;
-            self.widgets[self.current_id].children.push(widget.id);
-            target_id = Some(widget.id);
-            self.widgets.push(widget);
-        }
-
-        self.widgets[target_id.unwrap()].style = if let Some(style) = self.temp_style_info.clone() {
-            let style = style.clone();
-            self.temp_style_info = None;
-            style
-        } else {
-            self.styles[self.styles.len() - 1].clone()
-        };
-
-        (target_id.unwrap(), interaction)
-    }
 }
 
 impl Ui {
@@ -514,7 +407,7 @@ impl Ui {
             Layout::Horizontal => WidgetFlags::INVISIBLE,
             _ => 0,
         };
-        let (new_id, interaction) = self.windows[w].check_widget(Widget {
+        let (new_id, interaction) = self.check_widget(Widget {
             name: name.to_string(),
             size,
             layout,
@@ -530,10 +423,146 @@ impl Ui {
         self.windows[w].current_id = self.windows[w].widgets[self.windows[w].current_id].parent;
     }
 
+    // ============================================================
+
+    pub fn check_widget(&mut self, widget: Widget) -> (usize, Interaction) {
+        let mut interaction = Interaction::default();
+        let w = self.current_id;
+
+        let mut target_id = None;
+        for widget_id in &self.windows[w].widgets[self.windows[w].current_id].children {
+            if self.windows[w].widgets[*widget_id].name == widget.name {
+                target_id = Some(*widget_id);
+            }
+        }
+
+        if let Some(id) = target_id {
+            interaction = self.windows[w].widgets[id].interaction.clone();
+        } else {
+            let mut widget = widget;
+            widget.id = self.windows[w].widgets.len();
+            widget.parent = self.windows[w].current_id;
+            target_id = Some(widget.id);
+            self.windows[w].push_widget(widget);
+        }
+
+        self.windows[w].widgets[target_id.unwrap()].style = if let Some(style) = self.windows[w].temp_style_info.clone() {
+            let style = style.clone();
+            self.windows[w].temp_style_info = None;
+            style
+        } else {
+            self.windows[w].styles[self.windows[w].styles.len() - 1].clone()
+        };
+
+        (target_id.unwrap(), interaction)
+    }
+
+    pub fn draw_node(&self, window_id: usize, id: usize, level: usize) {
+        let widget = &self.windows[window_id].widgets[id];
+        let style = widget.style.clone();
+        let flags = widget.flags;
+
+        // println!("{}draw {}: {:?}", " ".repeat(level), widget.name, widget.rect);
+        // println!("I am {} and my children are {:?}", widget.name, widget.children);
+
+        if flags & WidgetFlags::INVISIBLE == 0 {
+
+            let color = if widget.hovered && (flags & WidgetFlags::CLICKABLE != 0) {
+                color!(128, 128, 128)
+            } else if self.keyboard_intercepted && id == self.keyboard_id && (flags & WidgetFlags::EDIT_TEXT != 0) {
+                color!(50, 50, 50)
+            } else {
+                style.background_color
+            };
+
+            if flags & WidgetFlags::DRAW_BORDER != 0 {
+                g::draw_rect(widget.rect, style.border_color);
+                let inside_rect = Rect {
+                    x: widget.rect.x + style.border_size,
+                    y: widget.rect.y + style.border_size,
+                    w: widget.rect.w - style.border_size * 2.0,
+                    h: widget.rect.h - style.border_size * 2.0,
+                };
+                g::draw_rect(inside_rect, color);
+            } else {
+                g::draw_rect(widget.rect, color);
+            }
+
+            if flags & WidgetFlags::DRAW_TEXT != 0 {
+                let display_text = get_display_text(&widget.name);
+                draw_text(&display_text, widget.rect.x + style.padding, widget.rect.y + style.padding, &style);
+            }
+            if flags & WidgetFlags::EDIT_TEXT != 0 {
+                //println!("{}", widget.content_str);
+                draw_text(&widget.content_str, widget.rect.x + style.padding, widget.rect.y + style.padding, &style);
+            }
+        }
+
+        for i in 0..widget.children.len() {
+            let child_id = widget.children[i];
+            self.draw_node(window_id, child_id, level + 1);
+        }
+    }
+
+    pub fn calc_input(&mut self, window_id: usize, id: usize, level: usize) {
+        let w = window_id;
+        self.windows[w].widgets[id].hovered = false;
+        let flags = self.windows[w].widgets[id].flags;
+        let mut interaction = self.windows[w].widgets[id].interaction.clone();
+
+        for i in 0..self.windows[w].widgets[id].children.len() {
+            let child_id = self.windows[w].widgets[id].children[i];
+            self.calc_input(window_id, child_id, level + 1);
+        }
+
+        interaction.clicked = false;
+
+        let (mouse_x, mouse_y) = g::mouse_position();
+
+        // println!("{} widget rect {:?} window rect {:?} mouse {}, {}", self.widgets[id].name, self.widgets[id].rect, self.rect, mouse_x, mouse_y);
+        if !self.mouse_intercepted && self.windows[w].widgets[id].rect.contains(vec2!(mouse_x, mouse_y)) && (flags & WidgetFlags::INVISIBLE == 0) {
+            self.mouse_intercepted = true;
+            if flags & WidgetFlags::CLICKABLE != 0 {
+                self.windows[w].widgets[id].hovered = true;
+                interaction.hovered = true;
+                if g::is_mouse_left_pressed() {
+                    //println!("CLICKED");
+                    interaction.clicked = true;
+
+                    if flags & WidgetFlags::MOVABLE != 0 {
+                        interaction.dragging = true;
+                    }
+
+                    if flags & WidgetFlags::EDIT_TEXT != 0 {
+                        //println!("EDIT_TEXT");
+                        self.keyboard_intercepted = true;
+                        self.keyboard_id = id;
+                    }
+                }
+            }
+        }
+
+        if (flags & WidgetFlags::EDIT_TEXT != 0) && self.keyboard_intercepted && self.keyboard_id == id {
+            if let Some(text) = g::get_text() {
+                self.windows[w].widgets[id].content_str.push_str(&text);
+                println!("got {}", text);
+                println!("{}", self.windows[w].widgets[id].content_str);
+            }
+        }
+
+        if !g::is_mouse_left_down()  {
+            interaction.dragging = false;
+        }
+
+        self.windows[w].widgets[id].interaction = interaction;
+    }
+
+    // ============================================================
+
     pub fn button(&mut self, name: &str) -> Interaction {
         let w = self.current_id;
         let id = self.windows[w].widgets.len();
-        let (_, interaction) = self.windows[w].check_widget(Widget {
+        let (_, interaction) = self.check_widget(Widget {
             id,
             name: name.to_string(),
             size: [
@@ -546,10 +575,42 @@ impl Ui {
         interaction
     }
 
+    pub fn label(&mut self, name: &str) -> Interaction {
+        let w = self.current_id;
+        let id = self.windows[w].widgets.len();
+        let (_, interaction) = self.check_widget(Widget {
+            id,
+            name: name.to_string(),
+            size: [
+                Size::new(SizeKind::TextContent, 0.0, 1.0),
+                Size::new(SizeKind::TextContent, 0.0, 1.0),
+            ],
+            flags: WidgetFlags::DRAW_TEXT,
+            ..Default::default()
+        });
+        interaction
+    }
+
+    pub fn text_box(&mut self, name: &str) -> Interaction {
+        let w = self.current_id;
+        let id = self.windows[w].widgets.len();
+        let (_, interaction) = self.check_widget(Widget {
+            id,
+            name: name.to_string(),
+            size: [
+                Size::new(SizeKind::PercentOfParent, 100.0, 0.0),
+                Size::new(SizeKind::PercentOfParent, 100.0, 0.0),
+            ],
+            flags: WidgetFlags::DRAW_BORDER | WidgetFlags::EDIT_TEXT | WidgetFlags::CLICKABLE,
+            ..Default::default()
+        });
+        interaction
+    }
+
     pub fn spacer(&mut self, name: &str) -> Interaction {
         let w = self.current_id;
         let id = self.windows[w].widgets.len();
-        let (_, interaction) = self.windows[w].check_widget(Widget {
+        let (_, interaction) = self.check_widget(Widget {
             id,
             name: name.to_string(),
             size: [
@@ -561,6 +622,8 @@ impl Ui {
         });
         interaction
     }
+
+    // ============================================================
 
     fn check_window(&mut self, window: Window) {
 
@@ -606,6 +669,7 @@ impl Ui {
 
         self.current_id = 0;
         self.mouse_intercepted = false;
+        //self.keyboard_intercepted = false;
 
         // println!("========================================");
         self.windows[0].rect = rect!(0.0, 0.0, g::screen_width(), g::screen_height());
@@ -647,17 +711,14 @@ impl Ui {
             self.windows[w].calc_positions(0, 0, vec2!(0, 0));
         }
 
-        for w in (0..self.windows.len()).rev() {
-            self.windows[w].calc_input(0, 0, self.mouse_intercepted);
-            if self.windows[w].mouse_intercepted {
-                self.mouse_intercepted = true;
-            }
+        for window_id in (0..self.windows.len()).rev() {
+            self.calc_input(window_id, 0, 0);
         }
 
-        for w in 0..self.windows.len() {
-            for i in 0..self.windows[w].widgets.len() {
+        for window_id in 0..self.windows.len() {
+            for i in 0..self.windows[window_id].widgets.len() {
                 // println!("-------------------------------");
-                self.windows[w].draw_node(0, 0, &mut self.style);
+                self.draw_node(window_id, 0, 0);
             }
         }
     }

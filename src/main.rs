@@ -200,11 +200,12 @@ async fn main() {
         push_style!(ui,
             background_color: color!(0, 128, 0),
         );
-        if ui.button("Open2").clicked {
-            println!("Open2");
+        ui.label("File:");
+        if ui.text_box("File Input 1").clicked {
+            println!("File input 1");
         }
-        if ui.button("Save2").clicked {
-            println!("Save2");
+        if ui.text_box("File Input 2").clicked {
+            println!("File input 2");
         }
         ui.pop_style();
 
