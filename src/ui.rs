@@ -96,6 +96,8 @@ pub struct Interaction {
     pub clicked: bool,
     pub hovered: bool,
     pub dragging: bool,
+    pub text_edited: bool,
+    pub text: String,
 }
 
 #[derive(Default)]
@@ -174,6 +176,22 @@ fn draw_text(text: &str, x: f32, y: f32, style: &StyleInfo) {
         color: style.text_color,
         ..Default::default()
     });
+}
+
+fn edit_line(text: &mut String) -> bool {
+    let mut text_edited = false;
+
+    if let Some(new_text) = g::get_text() {
+        text.push_str(&new_text);
+        text_edited = true;
+    }
+
+    if g::is_key_pressed(Key::Backspace) {
+        text.pop();
+        text_edited = true;
+    }
+
+    text_edited
 }
 
 impl Window {
@@ -516,6 +534,7 @@ impl Ui {
         }
 
         interaction.clicked = false;
+        interaction.text_edited = false;
 
         let (mouse_x, mouse_y) = g::mouse_position();
 
@@ -543,16 +562,18 @@ impl Ui {
         }
 
         if (flags & WidgetFlags::EDIT_TEXT != 0) && self.keyboard_intercepted && self.keyboard_id == id {
-            if let Some(text) = g::get_text() {
-                self.windows[w].widgets[id].content_str.push_str(&text);
-                println!("got {}", text);
-                println!("{}", self.windows[w].widgets[id].content_str);
-            }
+            interaction.text_edited = edit_line(&mut self.windows[w].widgets[id].content_str);
+            //if let Some(text) = g::get_text() {
+            //    self.windows[w].widgets[id].content_str.push_str(&text);
+            //    println!("got {}", text);
+            //    println!("{}", self.windows[w].widgets[id].content_str);
+            //}
         }
 
         if !g::is_mouse_left_down()  {
             interaction.dragging = false;
         }
+        interaction.text = self.windows[w].widgets[id].content_str.clone();
 
         self.windows[w].widgets[id].interaction = interaction;
     }

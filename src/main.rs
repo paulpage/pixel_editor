@@ -201,12 +201,22 @@ async fn main() {
             background_color: color!(0, 128, 0),
         );
         ui.label("File:");
+
+        let file_input_1 = ui.text_box("File Input 1");
+        if file_input_1.text_edited {
+            println!("the text was edited and now it's {}", file_input_1.text);
+        }
+
+
+
         if ui.text_box("File Input 1").clicked {
             println!("File input 1");
         }
         if ui.text_box("File Input 2").clicked {
             println!("File input 2");
         }
+
+
         ui.pop_style();
 
         ui.spacer("toolbar_spacer");

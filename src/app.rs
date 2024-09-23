@@ -77,10 +77,38 @@ pub fn is_super_down() -> bool {
     is_key_down(Key::LeftSuper) || is_key_down(Key::RightSuper)
 }
 
+fn is_printable(c: char) -> bool {
+    // Check if it's a printable ASCII character
+    if c.is_ascii() {
+        return c.is_ascii_graphic() || c.is_ascii_whitespace();
+    }
+
+    // For non-ASCII characters, we need to check Unicode categories
+    match c {
+        // Exclude control characters and non-characters
+        '\u{0000}'..='\u{001F}' | '\u{007F}'..='\u{009F}' | '\u{FDD0}'..='\u{FDEF}' => false,
+        
+        // Exclude private use area
+        '\u{E000}'..='\u{F8FF}' | '\u{F0000}'..='\u{FFFFD}' | '\u{100000}'..='\u{10FFFD}' => false,
+        
+        // Exclude non-characters
+        '\u{FFF0}'..='\u{FFFF}' | '\u{1FFFE}'..='\u{1FFFF}' | '\u{2FFFE}'..='\u{2FFFF}' |
+        '\u{3FFFE}'..='\u{3FFFF}' | '\u{4FFFE}'..='\u{4FFFF}' | '\u{5FFFE}'..='\u{5FFFF}' |
+        '\u{6FFFE}'..='\u{6FFFF}' | '\u{7FFFE}'..='\u{7FFFF}' | '\u{8FFFE}'..='\u{8FFFF}' |
+        '\u{9FFFE}'..='\u{9FFFF}' | '\u{AFFFE}'..='\u{AFFFF}' | '\u{BFFFE}'..='\u{BFFFF}' |
+        '\u{CFFFE}'..='\u{CFFFF}' | '\u{DFFFE}'..='\u{DFFFF}' | '\u{EFFFE}'..='\u{EFFFF}' |
+        '\u{FFFFE}'..='\u{FFFFF}' | '\u{10FFFE}'..='\u{10FFFF}' => false,
+        
+        // All other characters are considered printable
+        _ => true,
+    }
+}
+
 pub fn get_text() -> Option<String> {
     let mut text = None;
     while let Some(c) = get_char_pressed() {
-        if ((c as u32) < 57344 || (c as u32) > 63743) && !is_ctrl_down() && !is_alt_down() && !is_super_down() {
+        println!("c = {} ({} as u32)", c, c as u32);
+        if is_printable(c) && !is_ctrl_down() && !is_alt_down() && !is_super_down() {
             text.get_or_insert(String::new()).push_str(&c.to_string());
         }
     }
